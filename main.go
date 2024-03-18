@@ -32,6 +32,15 @@ var fingerprintsFile string = "./fingerprints/can-i-take-over-xyz_fingerprints.j
 var outputFile string = "output.md"
 
 func main() {
+	// Check for help request
+	if len(os.Args) > 1 {
+		arg := os.Args[1]
+		if arg == "--help" {
+			printHelp()
+			return
+		}
+	}
+
 	if len(os.Args) < 2 {
 		fmt.Println("Usage: go run main.go <domain>")
 		os.Exit(1)
@@ -61,6 +70,15 @@ func main() {
 	log.Info("Checking subdomains for: ", domain)
 
 	queryCRTSH(domain)
+}
+
+func printHelp() {
+	fmt.Println("SubSnipe Help")
+	fmt.Println("Usage: subsnipe <domain>")
+	fmt.Println("Example: ./subsnipe example.com")
+	fmt.Println("\nOptions:")
+	fmt.Println("--help\t\tShow this help message")
+	fmt.Println("\nSubSnipe queries for subdomains and checks their CNAME records to identify potentially take-over-able subdomains based on known services' fingerprints.")
 }
 
 func printIntro() {
