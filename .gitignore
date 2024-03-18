@@ -21,4 +21,5 @@
 go.work
 
 # project files
-subdomains.txt
+crt-subdomains.txt
+output.txt
