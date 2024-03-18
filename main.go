@@ -23,7 +23,18 @@ type cnameResult struct {
 	err    error
 }
 
+var (
+	found    []string
+	notFound []string
+)
+
 func main() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("Recovered in main: %v", r)
+		}
+	}()
+
 	if len(os.Args) < 2 {
 		fmt.Println("Usage: go run main.go <domain>")
 		os.Exit(1)
@@ -127,11 +138,14 @@ func checkCNAMEs(fileName string) {
 	var wg sync.WaitGroup
 	results := make(chan cnameResult, 100) // Buffer may be adjusted based on expected concurrency
 
-	// Process results concurrently to sort and write to output.txt
-	go processResults(results)
-
 	maxConcurrency := 20
 	sem := make(chan struct{}, maxConcurrency) // Control concurrency with a semaphore
+
+	// Launch a goroutine to process results concurrently
+	go func() {
+		wg.Wait()    // Wait for all queries to complete
+		close(results) // Signal completion of queries
+	}()
 
 	for scanner.Scan() {
 		domain := scanner.Text()
@@ -146,12 +160,19 @@ func checkCNAMEs(fileName string) {
 		}(domain)
 	}
 
-	wg.Wait() // Wait for all queries to complete
-	close(results) // Signal completion of queries
-
 	if err := scanner.Err(); err != nil {
 		log.Error("Error reading from file: ", err)
+		return
 	}
+
+	// Wait for all queries to finish
+	wg.Wait()
+
+	// Process results after all queries are complete
+	processResults(results)
+
+	// Write results after processing
+	writeResults()
 }
 
 // Performs a CNAME query for a given domain and sends the result to the results channel
@@ -166,26 +187,23 @@ func queryAndSendCNAME(domain string, results chan<- cnameResult) {
 
 // Processes CNAME query results from the results channel, sorting them into found and not found
 func processResults(results <-chan cnameResult) {
-	var found []string
-	var notFound []string
-
 	for result := range results {
 		if result.err != nil || result.cname == "" {
-			log.Warnf("Processing no CNAME found for: %s", result.domain)
-			notFound = append(notFound, fmt.Sprintf("No CNAME record found for: %s", result.domain))
+			notFoundMsg := fmt.Sprintf("No CNAME record found for: %s", result.domain)
+			log.Warnf(notFoundMsg)
+			notFound = append(notFound, notFoundMsg)
 		} else {
-			log.Infof("Processing CNAME found for: %s, CNAME: %s", result.domain, result.cname)
-			found = append(found, fmt.Sprintf("CNAME for %s is: %s", result.domain, result.cname))
+			foundMsg := fmt.Sprintf("CNAME for %s is: %s", result.domain, result.cname)
+			log.Infof(foundMsg)
+			found = append(found, foundMsg)
 		}
 	}
 
-	writeResults(found, notFound)
+	log.Info("... Finished querying CNAMEs")
 }
 
 // Writes the sorted CNAME query results to an output file
-func writeResults(found, notFound []string) {
-	log.Info("writeResults started!")
-
+func writeResults() {
 	file, err := os.Create("output.txt")
 	if err != nil {
 		log.Error("Error creating output file: ", err)
