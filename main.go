@@ -52,6 +52,9 @@ func main() {
 	CheckAppVersion()
 	color.Yellow("Current version: %s\n\n", AppVersion)
 
+	// check if a later version of this tool exists
+	NotifyOfUpdates()
+
 	// Check if https://github.com/EdOverflow/can-i-take-over-xyz/blob/master/fingerprints.json differs from the local copy in
 	// ./fingerprints/can-i-take-over-xyz_fingerprints.json (i.e., has been updated). If so, update our local copy
 	log.Info("Checking for new fingerprints (this tool uses https://github.com/EdOverflow/can-i-take-over-xyz to determine subdomains that can be taken over)")

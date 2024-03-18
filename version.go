@@ -56,7 +56,7 @@ func NotifyOfUpdates() {
 
 	// check if a newer version exists in the GitHub Releases
 	if vCurrent.LessThan(vLatest) {
-		color.HiYellow(fmt.Sprintf("Please upgrade to the latest version of this tool (%s) by visiting %s\n\n", response["tag_name"], latestRelease))
+		color.Red(fmt.Sprintf("Please upgrade to the latest version of this tool (%s) by visiting %s\n\n", response["tag_name"], latestRelease))
 	}
 }
 
