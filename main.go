@@ -28,6 +28,9 @@ var (
 	notFound []string
 )
 
+var fingerprintsFile string = "./fingerprints/can-i-take-over-xyz_fingerprints.json"
+var outputFile string = "output.md"
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Println("Usage: go run main.go <domain>")
@@ -96,14 +99,14 @@ func queryCRTSH(domain string) {
 
 	uniqueCommonNames := extractUniqueCommonNames(data)
 
-	outputFile := "crt-subdomains.txt"
-	if err := writeSubdomainsToFile(uniqueCommonNames, outputFile); err != nil {
+	subdomainsFile := "crt-subdomains.txt"
+	if err := writeSubdomainsToFile(uniqueCommonNames, subdomainsFile); err != nil {
 		log.Error("Error writing to file: ", err)
 		return
 	}
 
-	log.Info("Unique common names have been extracted to ", outputFile)
-	checkCNAMEs(outputFile)
+	log.Info("Unique common names have been extracted to ", subdomainsFile)
+	checkCNAMEs(subdomainsFile)
 }
 
 // Extracts unique common names from the JSON data returned by crt.sh
@@ -219,38 +222,93 @@ func processResults(results <-chan cnameResult) {
 	log.Info("... Finished querying CNAMEs")
 }
 
-// Writes the sorted CNAME query results to an output file
+// Writes the sorted CNAME query results to an output markdown file with categorization based on exploitability
 func writeResults() {
-	file, err := os.Create("output.txt")
-	if err != nil {
-		log.Error("Error creating output file: ", err)
-		return
-	}
-	defer file.Close()
+    fingerprints, err := loadFingerprints(fingerprintsFile)
+    if err != nil {
+        log.Fatalf("Error loading fingerprints: %v", err)
+    }
 
-	if len(found) > 0 {
-		file.WriteString("CNAMEs Found:\n\n")
-		for _, f := range found {
-			file.WriteString("- " + f + "\n")
-		}
-		file.WriteString("\n")
-	}
+    outputFile, err := os.Create(outputFile)
+    if err != nil {
+        log.Fatalf("Error creating output file: %v", err)
+    }
+    defer outputFile.Close()
 
-	if len(notFound) > 0 {
-		file.WriteString("No CNAMEs Found:\n\n")
-		for _, nf := range notFound {
-			file.WriteString("- " + nf + "\n")
-		}
-	}
+    var isExploitable, notExploitable, unknownExploitability []string
 
-	log.Info("Results have been written to output.txt")
+    for _, f := range found {
+        cname := extractCNAME(f)
+        matched, vulnerable := isVulnerableCNAME(cname, fingerprints)
+
+        if matched {
+            if vulnerable {
+                isExploitable = append(isExploitable, f+" (found matching fingerprint - vulnerable)")
+            } else {
+                notExploitable = append(notExploitable, f+" (found matching fingerprint - safe)")
+            }
+        } else {
+            unknownExploitability = append(unknownExploitability, f)
+        }
+    }
+
+    if len(isExploitable) > 0 {
+        outputFile.WriteString("### Is Exploitable\n\n")
+        for _, item := range isExploitable {
+            outputFile.WriteString("- " + item + "\n")
+        }
+        outputFile.WriteString("\n")
+    }
+
+    if len(notExploitable) > 0 {
+        outputFile.WriteString("### Not Exploitable\n\n")
+        for _, item := range notExploitable {
+            outputFile.WriteString("- " + item + "\n")
+        }
+        outputFile.WriteString("\n")
+    }
+
+    if len(unknownExploitability) > 0 {
+        outputFile.WriteString("### Exploitability Unknown\n\n")
+        for _, item := range unknownExploitability {
+            outputFile.WriteString("- " + item + "\n")
+        }
+    }
+
+    log.Println("Results have been written to output.md")
+}
+
+// Attempts to extract the top-level domain from a given domain name
+func extractTLD(domain string) string {
+    parts := strings.Split(domain, ".")
+    if len(parts) >= 2 {
+        // Return the last two parts of the domain as the TLD
+        return parts[len(parts)-2] + "." + parts[len(parts)-1]
+    }
+    return domain // Return the original domain if it doesn't follow expected structure
+}
+
+// Searches for a CNAME in the fingerprints and checks its vulnerability status.
+func isVulnerableCNAME(cname string, fingerprints map[string]map[string]interface{}) (bool, bool) {
+    // Trim the trailing dot from the cname if present
+    cname = strings.TrimSuffix(cname, ".")
+    
+    for _, fingerprint := range fingerprints {
+        cnameList := fingerprint["cname"].([]interface{})
+        for _, c := range cnameList {
+            pattern := c.(string)
+            if strings.HasSuffix(cname, pattern) {
+                return true, fingerprint["vulnerable"].(bool)
+            }
+        }
+    }
+    return false, false // CNAME not found in fingerprints
 }
 
 // Checks if https://raw.githubusercontent.com/EdOverflow/can-i-take-over-xyz/master/fingerprints.json has been updated. If so,
 // our local copy gets updated too
 func updateFingerprints() (bool, error) {
 	url := "https://raw.githubusercontent.com/EdOverflow/can-i-take-over-xyz/master/fingerprints.json"
-	localFile := "./fingerprints/can-i-take-over-xyz_fingerprints.json"
 
 	// Fetch the content of the remote file
 	resp, err := http.Get(url)
@@ -271,7 +329,7 @@ func updateFingerprints() (bool, error) {
 	}
 
 	// Read the content of the local file, if it exists
-	localContent, err := ioutil.ReadFile(localFile)
+	localContent, err := ioutil.ReadFile(fingerprintsFile)
 	if err != nil && !os.IsNotExist(err) {
 		return false, fmt.Errorf("error reading local file: %v", err)
 	}
@@ -279,7 +337,7 @@ func updateFingerprints() (bool, error) {
 	// Compare the content of the remote and local files
 	if string(remoteContent) != string(localContent) {
 		// Write the fetched content to the local file
-		err := ioutil.WriteFile(localFile, remoteContent, 0644)
+		err := ioutil.WriteFile(fingerprintsFile, remoteContent, 0644)
 		if err != nil {
 			return false, fmt.Errorf("error writing to local file: %v", err)
 		}
@@ -287,4 +345,38 @@ func updateFingerprints() (bool, error) {
 	}
 
 	return false, nil
+}
+
+// Extracts CNAME from the result string
+func extractCNAME(result string) string {
+	parts := strings.Split(result, "is:")
+	if len(parts) > 1 {
+		return strings.TrimSpace(parts[1])
+	}
+	return ""
+}
+
+// Loads fingerprints from the specified file into a map
+func loadFingerprints(filename string) (map[string]map[string]interface{}, error) {
+    var fingerprints []map[string]interface{}
+    fingerprintData, err := ioutil.ReadFile(filename)
+    if err != nil {
+        return nil, err
+    }
+    
+    err = json.Unmarshal(fingerprintData, &fingerprints)
+    if err != nil {
+        return nil, err
+    }
+
+    // Map to hold the domain (or pattern) and its fingerprint data
+    fingerprintMap := make(map[string]map[string]interface{})
+    for _, fingerprint := range fingerprints {
+        for _, cname := range fingerprint["cname"].([]interface{}) {
+            // Assuming the structure allows direct mapping like this
+            fingerprintMap[cname.(string)] = fingerprint
+        }
+    }
+
+    return fingerprintMap, nil
 }
