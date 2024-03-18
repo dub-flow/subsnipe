@@ -29,12 +29,6 @@ var (
 )
 
 func main() {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Errorf("Recovered in main: %v", r)
-		}
-	}()
-
 	if len(os.Args) < 2 {
 		fmt.Println("Usage: go run main.go <domain>")
 		os.Exit(1)
@@ -42,9 +36,23 @@ func main() {
 
 	printIntro()
 
-	// check if the AppVersion was already set during compilation - otherwise manually get it from `./VERSION`
+	// Check if the AppVersion was already set during compilation - otherwise manually get it from `./VERSION`
 	CheckAppVersion()
 	color.Yellow("Current version: %s\n\n", AppVersion)
+
+	// Check if https://github.com/EdOverflow/can-i-take-over-xyz/blob/master/fingerprints.json differs from the local copy in
+	// ./fingerprints/can-i-take-over-xyz_fingerprints.json (i.e., has been updated). If so, update our local copy
+	log.Info("Checking for new fingerprints (this tool uses https://github.com/EdOverflow/can-i-take-over-xyz to determine subdomains that can be taken over)")
+	updated, err := updateFingerprints()
+	if err != nil {
+		log.Error("Error updating fingerprints:", err)
+		return
+	}
+	if updated {
+		log.Info("Fingerprints updated")
+	} else {
+		log.Info("Fingerprints are already up to date")
+	}
 
 	domain := os.Args[1]
 	log.Info("Checking subdomains for: ", domain)
@@ -143,8 +151,17 @@ func checkCNAMEs(fileName string) {
 
 	// Launch a goroutine to process results concurrently
 	go func() {
-		wg.Wait()    // Wait for all queries to complete
-		close(results) // Signal completion of queries
+		for result := range results {
+			if result.err != nil || result.cname == "" {
+				notFoundMsg := fmt.Sprintf("No CNAME record found for: %s", result.domain)
+				log.Warnf(notFoundMsg)
+				notFound = append(notFound, notFoundMsg)
+			} else {
+				foundMsg := fmt.Sprintf("CNAME for %s is: %s", result.domain, result.cname)
+				log.Infof(foundMsg)
+				found = append(found, foundMsg)
+			}
+		}
 	}()
 
 	for scanner.Scan() {
@@ -168,8 +185,8 @@ func checkCNAMEs(fileName string) {
 	// Wait for all queries to finish
 	wg.Wait()
 
-	// Process results after all queries are complete
-	processResults(results)
+	// Close the results channel after all queries are complete
+	close(results)
 
 	// Write results after processing
 	writeResults()
@@ -227,4 +244,47 @@ func writeResults() {
 	}
 
 	log.Info("Results have been written to output.txt")
+}
+
+// Checks if https://raw.githubusercontent.com/EdOverflow/can-i-take-over-xyz/master/fingerprints.json has been updated. If so,
+// our local copy gets updated too
+func updateFingerprints() (bool, error) {
+	url := "https://raw.githubusercontent.com/EdOverflow/can-i-take-over-xyz/master/fingerprints.json"
+	localFile := "./fingerprints/can-i-take-over-xyz_fingerprints.json"
+
+	// Fetch the content of the remote file
+	resp, err := http.Get(url)
+	if err != nil {
+		return false, fmt.Errorf("error fetching remote file: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Check if the request was successful
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	// Read the content of the remote file
+	remoteContent, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return false, fmt.Errorf("error reading remote content: %v", err)
+	}
+
+	// Read the content of the local file, if it exists
+	localContent, err := ioutil.ReadFile(localFile)
+	if err != nil && !os.IsNotExist(err) {
+		return false, fmt.Errorf("error reading local file: %v", err)
+	}
+
+	// Compare the content of the remote and local files
+	if string(remoteContent) != string(localContent) {
+		// Write the fetched content to the local file
+		err := ioutil.WriteFile(localFile, remoteContent, 0644)
+		if err != nil {
+			return false, fmt.Errorf("error writing to local file: %v", err)
+		}
+		return true, nil
+	}
+
+	return false, nil
 }
