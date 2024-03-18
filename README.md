@@ -1,3 +1,5 @@
+![Go Version](https://img.shields.io/github/go-mod/go-version/dub-flow/subsnipe)
+
 # SubSnipe 🚀⚡
 
 `SubSnipe` is a multi-threaded tool designed to help finding subdomains that are vulnerable to takeover. It takes a domain as input, and searches `crt.sh` to search for known subdomains.
@@ -26,6 +28,11 @@ Example:
 
 - You can simply run this tool from source via `go run .` 
 - You can build the tool yourself via `go build`
+- You can build the `docker` image yourself via `docker build . -t fw10/subsnipe`
+
+# Run via Docker 🐳
+
+<tbd>
 
 # Bug Reports 🐞
 
