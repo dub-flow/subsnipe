@@ -32,7 +32,8 @@ Example:
 
 # Run via Docker 🐳
 
-<tbd>
+1. Traverse **into** the directory where you want the `output.md` to be stored to
+2. From within there, run `docker run -it --rm -v "$(pwd):/app" --name subsnipe fw10/subsnipe`
 
 # Bug Reports 🐞
 
