@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -28,25 +29,32 @@ var (
 	notFound []string
 )
 
+var (
+    domainFlag *string
+    outputFlag *string
+)
+
 var fingerprintsFile string = "./fingerprints/can-i-take-over-xyz_fingerprints.json"
-var outputFile string = "output.md"
 
 func main() {
-	// Check for help request
-	if len(os.Args) > 1 {
-		arg := os.Args[1]
-		if arg == "--help" {
-			printHelp()
-			return
-		}
-	}
+	// Initialize flags
+	domainFlag = flag.String("domain", "", "The domain to query for subdomains")
+	outputFlag = flag.String("output", "./output.md", "The location where the output file will be written to")
+	flag.Parse()
 
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: go run main.go <domain>")
-		os.Exit(1)
+	// Check if domain is provided
+	if *domainFlag == "" {
+		fmt.Println("Error: Domain not specified")
+		flag.Usage()
+		return
 	}
 
 	printIntro()
+
+	domain := *domainFlag
+    outputFilePath := *outputFlag
+	log.Info("Checking subdomains for: ", domain)
+	log.Info("Provided output file: ", outputFilePath)
 
 	// Check if the AppVersion was already set during compilation - otherwise manually get it from `./VERSION`
 	CheckAppVersion()
@@ -69,19 +77,7 @@ func main() {
 		log.Info("Fingerprints are already up to date")
 	}
 
-	domain := os.Args[1]
-	log.Info("Checking subdomains for: ", domain)
-
-	queryCRTSH(domain)
-}
-
-func printHelp() {
-	fmt.Println("SubSnipe Help")
-	fmt.Println("Usage: subsnipe <domain>")
-	fmt.Println("Example: ./subsnipe example.com")
-	fmt.Println("\nOptions:")
-	fmt.Println("--help\t\tShow this help message")
-	fmt.Println("\nSubSnipe queries for subdomains and checks their CNAME records to identify potentially take-over-able subdomains based on known services' fingerprints.")
+	queryCRTSH(domain, outputFilePath)
 }
 
 func printIntro() {
@@ -95,7 +91,7 @@ func printIntro() {
 }
 
 // Queries crt.sh for subdomains of the given domain and writes unique common names to a file
-func queryCRTSH(domain string) {
+func queryCRTSH(domain string, outputFilePath string) {
 	log.Info("Querying crt.sh for subdomains... (may take a moment)")
 
 	url := fmt.Sprintf("https://crt.sh/?q=%s&output=json", domain)
@@ -120,14 +116,14 @@ func queryCRTSH(domain string) {
 
 	uniqueCommonNames := extractUniqueCommonNames(data)
 
-	subdomainsFile := "crt-subdomains.txt"
-	if err := writeSubdomainsToFile(uniqueCommonNames, subdomainsFile); err != nil {
+	subdomainsFilePath := "crt-subdomains.txt"
+	if err := writeSubdomainsToFile(uniqueCommonNames, subdomainsFilePath); err != nil {
 		log.Error("Error writing to file: ", err)
 		return
 	}
 
-	log.Info("Unique common names have been extracted to ", subdomainsFile)
-	checkCNAMEs(subdomainsFile)
+	log.Info("Unique common names have been extracted to ", subdomainsFilePath)
+	checkCNAMEs(subdomainsFilePath, outputFilePath)
 }
 
 // Extracts unique common names from the JSON data returned by crt.sh
@@ -156,17 +152,17 @@ func writeSubdomainsToFile(subdomains map[string]bool, filename string) error {
 }
 
 // Reads subdomains from a file and queries for their CNAME records concurrently
-func checkCNAMEs(fileName string) {
+func checkCNAMEs(subdomainsFilePath string, outputFilePath string) {
 	log.Info("Querying CNAME records for subdomains...")
 
-	file, err := os.Open(fileName)
+	subdomainsFile, err := os.Open(subdomainsFilePath)
 	if err != nil {
 		log.Error("Error opening file: ", err)
 		return
 	}
-	defer file.Close()
+	defer subdomainsFile.Close()
 
-	scanner := bufio.NewScanner(file)
+	scanner := bufio.NewScanner(subdomainsFile)
 	var wg sync.WaitGroup
 	results := make(chan cnameResult, 100) // Buffer may be adjusted based on expected concurrency
 
@@ -213,7 +209,7 @@ func checkCNAMEs(fileName string) {
 	close(results)
 
 	// Write results after processing
-	writeResults()
+	writeResults(outputFilePath)
 }
 
 // Performs a CNAME query for a given domain and sends the result to the results channel
@@ -244,13 +240,13 @@ func processResults(results <-chan cnameResult) {
 }
 
 // Writes the sorted CNAME query results to an output markdown file with categorization based on exploitability
-func writeResults() {
+func writeResults(outputFilePath string) {
     fingerprints, err := loadFingerprints(fingerprintsFile)
     if err != nil {
         log.Fatalf("Error loading fingerprints: %v", err)
     }
 
-    outputFile, err := os.Create(outputFile)
+    outputFile, err := os.Create(outputFilePath)
     if err != nil {
         log.Fatalf("Error creating output file: %v", err)
     }

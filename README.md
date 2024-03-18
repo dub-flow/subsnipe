@@ -33,7 +33,7 @@ Example:
 # Run via Docker 🐳
 
 1. Traverse **into** the directory where you want the `output.md` to be stored to
-2. From within there, run `docker run -it --rm -v "$(pwd):/app" --name subsnipe fw10/subsnipe`
+2. From within there, run `docker run -it --rm -v "$(pwd):/app/output" fw10/subsnipe <domain>`
 
 # Bug Reports 🐞
 
