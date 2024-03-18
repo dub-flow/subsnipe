@@ -8,11 +8,17 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"sync"
 
 	log "github.com/sirupsen/logrus"
 
 	"github.com/fatih/color"
 )
+
+type cnameResult struct {
+	domain string
+	cname  string
+}
 
 func main() {
 	if len(os.Args) < 2 {
@@ -89,31 +95,53 @@ func queryCRTSH(domain string) {
 }
 
 func checkCNAMEs(fileName string) {
-	file, err := os.Open(fileName)
-	if err != nil {
-		log.Error("Error opening file:", err)
-		return
-	}
-	defer file.Close()
+    // Maximum number of concurrent goroutines
+    maxConcurrency := 20
+    sem := make(chan struct{}, maxConcurrency)
 
-	log.Infof("Start querying CNAMEs...\n\n")
+    file, err := os.Open(fileName)
+    if err != nil {
+        log.Error("Error opening file:", err)
+        return
+    }
+    defer file.Close()
 
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		domain := scanner.Text()
-		log.Infof("Querying CNAME for: %s", domain)
-		cname, err := exec.Command("dig", "+short", "CNAME", domain).Output()
-		if err != nil {
-			log.Error("Error querying CNAME:", err)
-			continue
-		}
-		if len(cname) == 0 {
-			log.Warnf("No CNAME record found for: %s\n\n", domain)
-		} else {
-			log.Infof("CNAME for %s is: %s\n", domain, cname)
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		log.Error("Error reading file:", err)
-	}
+    scanner := bufio.NewScanner(file)
+    var wg sync.WaitGroup
+
+    results := make(chan cnameResult, 100)
+
+    go func() {
+        for result := range results {
+            if result.cname == "" {
+                log.Warnf("No CNAME record found for: %s", result.domain)
+            } else {
+                log.Infof("CNAME for %s is: %s", result.domain, result.cname)
+            }
+        }
+    }()
+
+    for scanner.Scan() {
+        domain := scanner.Text()
+        wg.Add(1)
+        sem <- struct{}{} // Acquire semaphore
+        go func(domain string) {
+            defer wg.Done()
+            defer func() { <-sem }() // Release semaphore
+            cname, err := exec.Command("dig", "+short", "CNAME", domain).Output()
+            if err != nil {
+                log.Errorf("Error querying CNAME for %s: %v", domain, err)
+                results <- cnameResult{domain: domain, cname: ""}
+                return
+            }
+            results <- cnameResult{domain: domain, cname: string(cname)}
+        }(domain)
+    }
+
+    wg.Wait()
+    close(results)
+
+    if err := scanner.Err(); err != nil {
+        log.Error("Error reading file:", err)
+    }
 }
