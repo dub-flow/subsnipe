@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -279,7 +280,7 @@ func processCNAMEResult(result cnameResult, fingerprints map[string]map[string]i
     } else {
         // Handle the case where the service might be identified by its second-level domain in the fingerprints
         sld := extractServiceName(result.cname)
-        if serviceMatch, vulnerable, service := isServiceVulnerable(sld, fingerprints); serviceMatch {
+        if serviceMatch, vulnerable, service, fingerprintText, hasNXDOMAINFlag := isServiceVulnerable(sld, fingerprints); serviceMatch {
             serviceMsg := fmt.Sprintf("CNAME for %s is: %s (found potentially matching service '%s' - %s)", result.domain, result.cname, service, ifThenElse(vulnerable, "vulnerable", "safe"))
             appendResultBasedOnVulnerability(vulnerable, serviceMsg)
         } else {
@@ -287,4 +288,46 @@ func processCNAMEResult(result cnameResult, fingerprints map[string]map[string]i
             unknownExploitability = append(unknownExploitability, unknownMsg)
         }
     }
+}
+
+// Checks if the domain pointed by the CNAME is take-over-able
+func checkTakeover(domain string, fingerprintText string, hasNXDOMAINFlag bool) bool {
+	if hasNXDOMAINFlag {
+		return checkTakeoverDNS(domain, fingerprintText)
+	} else {
+		return checkTakeoverHTTP(domain, fingerprintText)
+	}
+}
+
+// Checks if the domain pointed by the CNAME is take-over-able by performing a DNS query
+func checkTakeoverDNS(domain string, fingerprintText string) bool {
+    cname := fmt.Sprintf("_cname.%s", domain) // Construct the CNAME query
+    _, err := net.LookupCNAME(cname)
+
+    if err != nil {
+        if dnsErr, ok := err.(*net.DNSError); ok && dnsErr.IsNotFound { // Check if NXDOMAIN error
+            return true // Take-over is possible
+        }
+        log.Errorf("Error performing DNS query for %s: %v", cname, err)
+    }
+    return false
+}
+
+func checkTakeoverHTTP(domain string, fingerprintText string) bool {
+	url := "http://" + domain
+	resp, err := http.Get(url)
+	if err != nil {
+		log.Errorf("Error making HTTP request to %s: %v", url, err)
+		return false
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Errorf("Error reading response body from %s: %v", url, err)
+		return false
+	}
+
+	// Check if the response body matches the fingerprint
+	return strings.Contains(string(body), fingerprintText)
 }

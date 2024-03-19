@@ -122,12 +122,14 @@ func extractServiceName(domain string) string {
 }
 
 // Check if the extracted SLD matches any service marked as vulnerable or safe in fingerprints.json
-func isServiceVulnerable(sld string, fingerprints map[string]map[string]interface{}) (bool, bool, string) {
+func isServiceVulnerable(sld string, fingerprints map[string]map[string]interface{}) (bool, bool, string, string, bool) {
 	for _, fingerprint := range fingerprints {
 		service, ok := fingerprint["service"].(string)
 		if ok && strings.EqualFold(service, sld) {
+			fingerprintText := fingerprint["fingerprint"].(string)
+			hasNXDOMAINFlag := fingerprint["nxdomain"].(string)
 			
-			return true, fingerprint["vulnerable"].(bool), service
+			return true, fingerprint["vulnerable"].(bool), service, fingerprintText, hasNXDOMAINFlag
 		}
 	}
 	return false, false, ""
