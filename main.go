@@ -247,24 +247,7 @@ func writeResults() {
     log.Println("Results have been written to", outputFileName)
 }
 
-// Searches for a CNAME in the fingerprints and checks its vulnerability status.
-func isVulnerableCNAME(cname string, fingerprints map[string]map[string]interface{}) (bool, bool) {
-    // Trim the trailing dot from the cname if present
-    cname = strings.TrimSuffix(cname, ".")
-    
-    for _, fingerprint := range fingerprints {
-        cnameList := fingerprint["cname"].([]interface{})
-        for _, c := range cnameList {
-            pattern := c.(string)
-            if strings.HasSuffix(cname, pattern) {
-                return true, fingerprint["vulnerable"].(bool)
-            }
-        }
-    }
-    return false, false // CNAME not found in fingerprints
-}
-
-// processCNAMEResult processes each CNAME query result, checking against fingerprints and service names
+// Processes each CNAME query result, checking against fingerprints and service names
 func processCNAMEResult(result cnameResult, fingerprints map[string]map[string]interface{}) {
     if result.err != nil || result.cname == "" {
         notFoundMsg := fmt.Sprintf("No CNAME record found for: %s", result.domain)
@@ -273,16 +256,32 @@ func processCNAMEResult(result cnameResult, fingerprints map[string]map[string]i
         return
     }
 
-    directMatch, vulnerable := isVulnerableCNAME(result.cname, fingerprints)
-    if directMatch {
-        foundMsg := fmt.Sprintf("CNAME for %s is: %s (found matching fingerprint - %s)", result.domain, result.cname, ifThenElse(vulnerable, "vulnerable", "safe"))
-        appendResultBasedOnVulnerability(vulnerable, foundMsg)
+	// Check our fingerprints if the CNAME is known to be vulnerable to takeover
+    directMatch, vulnerable, fingerprintText, hasNXDOMAINFlag := isVulnerableCNAME(result.cname, fingerprints)
+
+    if directMatch { 
+		// If the TLD of the queried CNAME exists in our fingerprints
+		if checkTakeover(result.cname, fingerprintText, hasNXDOMAINFlag) { 
+			// try to fingerprint the CNAME to se if a domain takeover is likely
+			serviceMsg := fmt.Sprintf("CNAME for %s is: %s (found matching fingerprint '%s') -> `Takeover Likely Possible!`", result.domain, result.cname, ifThenElse(vulnerable, "vulnerable", "safe"))
+			appendResultBasedOnVulnerability(vulnerable, serviceMsg)
+		} else {
+			foundMsg := fmt.Sprintf("CNAME for %s is: %s (found matching fingerprint - %s)", result.domain, result.cname, ifThenElse(vulnerable, "vulnerable", "safe"))
+			appendResultBasedOnVulnerability(vulnerable, foundMsg)
+		}
     } else {
         // Handle the case where the service might be identified by its second-level domain in the fingerprints
         sld := extractServiceName(result.cname)
         if serviceMatch, vulnerable, service, fingerprintText, hasNXDOMAINFlag := isServiceVulnerable(sld, fingerprints); serviceMatch {
-            serviceMsg := fmt.Sprintf("CNAME for %s is: %s (found potentially matching service '%s' - %s)", result.domain, result.cname, service, ifThenElse(vulnerable, "vulnerable", "safe"))
-            appendResultBasedOnVulnerability(vulnerable, serviceMsg)
+			if checkTakeover(result.cname, fingerprintText, hasNXDOMAINFlag) { 
+				// try to fingerprint the CNAME to se if a domain takeover is likely
+				serviceMsg := fmt.Sprintf("CNAME for %s is: %s (found potentially matching service '%s' - %s) -> Takeover Likely Possible!", result.domain, result.cname, service, ifThenElse(vulnerable, "vulnerable", "safe"))
+				appendResultBasedOnVulnerability(vulnerable, serviceMsg)
+			} else { 
+				serviceMsg := fmt.Sprintf("CNAME for %s is: %s (found potentially matching service '%s' - %s)", result.domain, result.cname, service, ifThenElse(vulnerable, "vulnerable", "safe"))
+				appendResultBasedOnVulnerability(vulnerable, serviceMsg)
+			}
+
         } else {
             unknownMsg := fmt.Sprintf("CNAME for %s is: %s", result.domain, result.cname)
             unknownExploitability = append(unknownExploitability, unknownMsg)
@@ -291,30 +290,39 @@ func processCNAMEResult(result cnameResult, fingerprints map[string]map[string]i
 }
 
 // Checks if the domain pointed by the CNAME is take-over-able
-func checkTakeover(domain string, fingerprintText string, hasNXDOMAINFlag bool) bool {
+func checkTakeover(cname string, fingerprintText string, hasNXDOMAINFlag bool) bool {
 	if hasNXDOMAINFlag {
-		return checkTakeoverDNS(domain, fingerprintText)
+		return checkTakeoverDNS(cname)
 	} else {
-		return checkTakeoverHTTP(domain, fingerprintText)
+		return checkTakeoverHTTP(cname, fingerprintText)
 	}
 }
 
 // Checks if the domain pointed by the CNAME is take-over-able by performing a DNS query
-func checkTakeoverDNS(domain string, fingerprintText string) bool {
-    cname := fmt.Sprintf("_cname.%s", domain) // Construct the CNAME query
-    _, err := net.LookupCNAME(cname)
+func checkTakeoverDNS(cname string) bool {
+	log.Info("Checking for NXDOMAIN for CNAME: ", cname)
 
-    if err != nil {
-        if dnsErr, ok := err.(*net.DNSError); ok && dnsErr.IsNotFound { // Check if NXDOMAIN error
-            return true // Take-over is possible
-        }
-        log.Errorf("Error performing DNS query for %s: %v", cname, err)
-    }
-    return false
+	_, err := net.LookupHost(cname)
+	if err != nil {
+		if strings.Contains(err.Error(), "no such host") {
+			log.Info("DNS_PROBE_FINISHED_NXDOMAIN error occurred for CNAME: ", cname)
+			log.Infof("+++ It's likely possible to takeover CNAME: %s +++", cname)
+			return true
+		}
+
+		log.Errorf("Other error occurred for CNAME %s: %s", cname, err)
+		return false
+	}
+
+	log.Infof("CNAME %s is resolvable", cname)
+
+	return false
 }
 
-func checkTakeoverHTTP(domain string, fingerprintText string) bool {
-	url := "http://" + domain
+func checkTakeoverHTTP(cname string, fingerprintText string) bool {
+	url := "http://" + cname
+	log.Info("Checking for fingerprint test in HTTP response for CNAME: ", cname)
+
 	resp, err := http.Get(url)
 	if err != nil {
 		log.Errorf("Error making HTTP request to %s: %v", url, err)
@@ -327,6 +335,8 @@ func checkTakeoverHTTP(domain string, fingerprintText string) bool {
 		log.Errorf("Error reading response body from %s: %v", url, err)
 		return false
 	}
+
+	log.Infof("Can fingerprint %s to be takeover-able", cname)
 
 	// Check if the response body matches the fingerprint
 	return strings.Contains(string(body), fingerprintText)

@@ -135,6 +135,26 @@ func isServiceVulnerable(sld string, fingerprints map[string]map[string]interfac
 	return false, false, "", "", false
 }
 
+// Searches for a CNAME in the fingerprints and checks its vulnerability status.
+func isVulnerableCNAME(cname string, fingerprints map[string]map[string]interface{}) (bool, bool, string, bool) {
+    // Trim the trailing dot from the cname if present
+    cname = strings.TrimSuffix(cname, ".")
+    
+    for _, fingerprint := range fingerprints {
+        cnameList := fingerprint["cname"].([]interface{})
+        for _, c := range cnameList {
+            pattern := c.(string)
+            if strings.HasSuffix(cname, pattern) {
+				fingerprintText := fingerprint["fingerprint"].(string)
+				hasNXDOMAINFlag := fingerprint["nxdomain"].(bool)
+
+                return true, fingerprint["vulnerable"].(bool), fingerprintText, hasNXDOMAINFlag
+            }
+        }
+    }
+    return false, false, "", false // CNAME not found in fingerprints
+}
+
 // Writes the extracted subdomains to the specified file
 func writeSubdomainsToFile(subdomains map[string]bool, filename string) error {
 	file, err := os.Create(filename)
