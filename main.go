@@ -29,7 +29,7 @@ var (
 	notFound 		 []string
     outputFileName   string  	= "output.md"
 	domain           string
-	fingerprintsFile string 	= "./fingerprints/can-i-take-over-xyz_fingerprints.json"
+	fingerprintsFile = filepath.Join("fingerprints", "can-i-take-over-xyz_fingerprints.json")
 )
 
 func main() {
@@ -59,10 +59,9 @@ func run(cmd *cobra.Command, args []string) {
 	NotifyOfUpdates()
 
 	// if the app runs inside a docker container, the output has to be written into `./output/output.md`, because
-	// we will mount the CWD inside the container into `/app/output/` 
+	// we will mount the CWD inside the container into `./output/` 
 	if os.Getenv("RUNNING_ENVIRONMENT") == "docker" {
-		dockerOutputPath := "/app/output"
-		outputFileName = filepath.Join(dockerOutputPath, outputFileName)
+		outputFileName = filepath.Join("output", outputFileName)
 	}
 
 	// Check if https://github.com/EdOverflow/can-i-take-over-xyz/blob/master/fingerprints.json differs from the local copy in
