@@ -25,11 +25,14 @@ type cnameResult struct {
 }
 
 var (
-	found    		 []string
-	notFound 		 []string
-    outputFileName   string  	= "output.md"
-	domain           string
-	fingerprintsFile = filepath.Join("fingerprints", "can-i-take-over-xyz_fingerprints.json")
+	found    		 	  []string
+	notFound 		 	  []string
+    outputFileName   	  string  	= "output.md"
+	domain           	  string
+	isExploitable         []string
+	notExploitable        []string
+	unknownExploitability []string
+	fingerprintsFile      = filepath.Join("fingerprints", "can-i-take-over-xyz_fingerprints.json")
 )
 
 func main() {
@@ -83,22 +86,6 @@ func run(cmd *cobra.Command, args []string) {
 	queryCRTSH()
 }
 
-func printIntro() {
-	color.Green("##################################\n")
-	color.Green("#                                #\n")
-	color.Green("#           SubSnipe             #\n")
-	color.Green("#                                #\n")
-	color.Green("#       By dub-flow with ❤️       #\n")
-	color.Green("#                                #\n")
-	color.Green("##################################\n\n")
-}
-
-// Checks if the 'dig' command is available on the system
-func checkDigAvailable() bool {
-    _, err := exec.LookPath("dig")
-    return err == nil
-}
-
 // Queries crt.sh for subdomains of the given domain and writes unique common names to a file
 func queryCRTSH() {
 	log.Info("Querying crt.sh for subdomains... (may take a moment)")
@@ -135,100 +122,74 @@ func queryCRTSH() {
 	checkCNAMEs(subdomainsFilePath)
 }
 
-// Extracts unique common names from the JSON data returned by crt.sh
-func extractUniqueCommonNames(data []map[string]interface{}) map[string]bool {
-	uniqueCommonNames := make(map[string]bool)
-	for _, entry := range data {
-		if cn, ok := entry["common_name"].(string); ok {
-			uniqueCommonNames[cn] = true
-		}
-	}
-	return uniqueCommonNames
-}
-
-// Writes the extracted subdomains to the specified file
-func writeSubdomainsToFile(subdomains map[string]bool, filename string) error {
-	file, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	for cn := range subdomains {
-		file.WriteString(cn + "\n")
-	}
-	return nil
-}
-
 // Reads subdomains from a file and queries for their CNAME records concurrently
 func checkCNAMEs(subdomainsFilePath string) {
-	log.Info("Querying CNAME records for subdomains...")
+    log.Info("Querying CNAME records for subdomains...")
 
-	subdomainsFile, err := os.Open(subdomainsFilePath)
-	if err != nil {
-		log.Error("Error opening file: ", err)
-		return
-	}
-	defer subdomainsFile.Close()
+    subdomainsFile, err := os.Open(subdomainsFilePath)
+    if err != nil {
+        log.Error("Error opening file: ", err)
+        return
+    }
+    defer subdomainsFile.Close()
 
-	scanner := bufio.NewScanner(subdomainsFile)
-	var wg sync.WaitGroup
-	results := make(chan cnameResult, 100) // Buffer may be adjusted based on expected concurrency
+    scanner := bufio.NewScanner(subdomainsFile)
+    var wg sync.WaitGroup
+    results := make(chan cnameResult, 100) // Buffer may be adjusted based on expected concurrency
 
-	maxConcurrency := 20
-	sem := make(chan struct{}, maxConcurrency) // Control concurrency with a semaphore
+    maxConcurrency := 20
+    sem := make(chan struct{}, maxConcurrency) // Control concurrency with a semaphore
 
-	// Launch a goroutine to process results concurrently
-	go func() {
-		for result := range results {
-			if result.err != nil || result.cname == "" {
-				notFoundMsg := fmt.Sprintf("No CNAME record found for: %s", result.domain)
-				log.Warnf(notFoundMsg)
-				notFound = append(notFound, notFoundMsg)
-			} else {
-				foundMsg := fmt.Sprintf("CNAME for %s is: %s", result.domain, result.cname)
-				log.Infof(foundMsg)
-				found = append(found, foundMsg)
-			}
-		}
-	}()
+    fingerprints, err := loadFingerprints(fingerprintsFile)
+    if err != nil {
+        log.Fatalf("Error loading fingerprints: %v", err)
+    }
 
-	for scanner.Scan() {
-		domain := scanner.Text()
-		wg.Add(1)
-		sem <- struct{}{} // Acquire semaphore
+    // Launch a goroutine to process results concurrently
+    go func() {
+        for result := range results {
+            processCNAMEResult(result, fingerprints)
+        }
+    }()
 
-		// Launch a goroutine for each CNAME query
-		go func(domain string) {
-			defer wg.Done()
-			defer func() { <-sem }() // Release semaphore
-			queryAndSendCNAME(domain, results)
-		}(domain)
-	}
+    for scanner.Scan() {
+        domain := scanner.Text()
+        wg.Add(1)
+        sem <- struct{}{} // Acquire semaphore
 
-	if err := scanner.Err(); err != nil {
-		log.Error("Error reading from file: ", err)
-		return
-	}
+        // Launch a goroutine for each CNAME query
+        go func(domain string) {
+            defer wg.Done()
+            defer func() { <-sem }() // Release semaphore
+            queryAndSendCNAME(domain, results)
+        }(domain)
+    }
 
-	// Wait for all queries to finish
-	wg.Wait()
+    if err := scanner.Err(); err != nil {
+        log.Error("Error reading from file: ", err)
+        return
+    }
 
-	// Close the results channel after all queries are complete
-	close(results)
+    // Wait for all queries to finish
+    wg.Wait()
 
-	// Write results after processing
-	writeResults()
+    // Close the results channel after all queries are complete
+    close(results)
+
+    // Write results after processing
+    writeResults()
 }
 
 // Performs a CNAME query for a given domain and sends the result to the results channel
 func queryAndSendCNAME(domain string, results chan<- cnameResult) {
-	cname, err := exec.Command("dig", "+short", "CNAME", domain).Output()
-	if err != nil || len(cname) == 0 {
-		results <- cnameResult{domain: domain, err: fmt.Errorf("no CNAME record found or dig command failed")}
-		return
-	}
-	results <- cnameResult{domain: domain, cname: strings.TrimSpace(string(cname))}
+    cname, err := exec.Command("dig", "+short", "CNAME", domain).Output()
+    if err != nil || len(cname) == 0 {
+        results <- cnameResult{domain: domain, err: fmt.Errorf("no CNAME record found or dig command failed")}
+    } else {
+        // Log the found CNAME
+        log.Infof("CNAME found for %s is: %s", domain, strings.TrimSpace(string(cname)))
+        results <- cnameResult{domain: domain, cname: strings.TrimSpace(string(cname))}
+    }
 }
 
 // Processes CNAME query results from the results channel, sorting them into found and not found
@@ -250,34 +211,13 @@ func processResults(results <-chan cnameResult) {
 
 // Writes the sorted CNAME query results to an output markdown file with categorization based on exploitability
 func writeResults() {
-    fingerprints, err := loadFingerprints(fingerprintsFile)
-    if err != nil {
-        log.Fatalf("Error loading fingerprints: %v", err)
-    }
-
     outputFile, err := os.Create(outputFileName)
     if err != nil {
         log.Fatalf("Error creating output file: %v", err)
     }
     defer outputFile.Close()
 
-    var isExploitable, notExploitable, unknownExploitability []string
-
-    for _, f := range found {
-        cname := extractCNAME(f)
-        matched, vulnerable := isVulnerableCNAME(cname, fingerprints)
-
-        if matched {
-            if vulnerable {
-                isExploitable = append(isExploitable, f+" (found matching fingerprint - vulnerable)")
-            } else {
-                notExploitable = append(notExploitable, f+" (found matching fingerprint - safe)")
-            }
-        } else {
-            unknownExploitability = append(unknownExploitability, f)
-        }
-    }
-
+    // Writing Is Exploitable section
     if len(isExploitable) > 0 {
         outputFile.WriteString("### Is Exploitable\n\n")
         for _, item := range isExploitable {
@@ -286,6 +226,7 @@ func writeResults() {
         outputFile.WriteString("\n")
     }
 
+    // Writing Not Exploitable section
     if len(notExploitable) > 0 {
         outputFile.WriteString("### Not Exploitable\n\n")
         for _, item := range notExploitable {
@@ -294,6 +235,7 @@ func writeResults() {
         outputFile.WriteString("\n")
     }
 
+    // Writing Exploitability Unknown section
     if len(unknownExploitability) > 0 {
         outputFile.WriteString("### Exploitability Unknown\n\n")
         for _, item := range unknownExploitability {
@@ -301,17 +243,7 @@ func writeResults() {
         }
     }
 
-    log.Println("Results have been written to output.md")
-}
-
-// Attempts to extract the top-level domain from a given domain name
-func extractTLD(domain string) string {
-    parts := strings.Split(domain, ".")
-    if len(parts) >= 2 {
-        // Return the last two parts of the domain as the TLD
-        return parts[len(parts)-2] + "." + parts[len(parts)-1]
-    }
-    return domain // Return the original domain if it doesn't follow expected structure
+    log.Println("Results have been written to", outputFileName)
 }
 
 // Searches for a CNAME in the fingerprints and checks its vulnerability status.
@@ -331,78 +263,41 @@ func isVulnerableCNAME(cname string, fingerprints map[string]map[string]interfac
     return false, false // CNAME not found in fingerprints
 }
 
-// Checks if https://raw.githubusercontent.com/EdOverflow/can-i-take-over-xyz/master/fingerprints.json has been updated. If so,
-// our local copy gets updated too
-func updateFingerprints() (bool, error) {
-	url := "https://raw.githubusercontent.com/EdOverflow/can-i-take-over-xyz/master/fingerprints.json"
+// Check if a service by name is vulnerable
+func isServiceVulnerable(cname string, fingerprints map[string]map[string]interface{}) (bool, bool, string) {
+    // Extract the service name from the CNAME
+    serviceName := extractServiceName(cname)
 
-	// Fetch the content of the remote file
-	resp, err := http.Get(url)
-	if err != nil {
-		return false, fmt.Errorf("error fetching remote file: %v", err)
-	}
-	defer resp.Body.Close()
-
-	// Check if the request was successful
-	if resp.StatusCode != http.StatusOK {
-		return false, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-
-	// Read the content of the remote file
-	remoteContent, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return false, fmt.Errorf("error reading remote content: %v", err)
-	}
-
-	// Read the content of the local file, if it exists
-	localContent, err := ioutil.ReadFile(fingerprintsFile)
-	if err != nil && !os.IsNotExist(err) {
-		return false, fmt.Errorf("error reading local file: %v", err)
-	}
-
-	// Compare the content of the remote and local files
-	if string(remoteContent) != string(localContent) {
-		// Write the fetched content to the local file
-		err := ioutil.WriteFile(fingerprintsFile, remoteContent, 0644)
-		if err != nil {
-			return false, fmt.Errorf("error writing to local file: %v", err)
-		}
-		return true, nil
-	}
-
-	return false, nil
-}
-
-// Extracts CNAME from the result string
-func extractCNAME(result string) string {
-	parts := strings.Split(result, "is:")
-	if len(parts) > 1 {
-		return strings.TrimSpace(parts[1])
-	}
-	return ""
-}
-
-// Loads fingerprints from the specified file into a map
-func loadFingerprints(filename string) (map[string]map[string]interface{}, error) {
-    var fingerprints []map[string]interface{}
-    fingerprintData, err := ioutil.ReadFile(filename)
-    if err != nil {
-        return nil, err
-    }
-    
-    err = json.Unmarshal(fingerprintData, &fingerprints)
-    if err != nil {
-        return nil, err
-    }
-
-    // Map to hold the domain (or pattern) and its fingerprint data
-    fingerprintMap := make(map[string]map[string]interface{})
     for _, fingerprint := range fingerprints {
-        for _, cname := range fingerprint["cname"].([]interface{}) {
-            // Assuming the structure allows direct mapping like this
-            fingerprintMap[cname.(string)] = fingerprint
+        if fingerprintService, ok := fingerprint["service"].(string); ok && strings.EqualFold(serviceName, fingerprintService) {
+            return true, fingerprint["vulnerable"].(bool), fingerprintService
         }
     }
+    return false, false, ""
+}
 
-    return fingerprintMap, nil
+// processCNAMEResult processes each CNAME query result, checking against fingerprints and service names
+func processCNAMEResult(result cnameResult, fingerprints map[string]map[string]interface{}) {
+    if result.err != nil || result.cname == "" {
+        notFoundMsg := fmt.Sprintf("No CNAME record found for: %s", result.domain)
+        log.Warnf(notFoundMsg)
+        notFound = append(notFound, notFoundMsg)
+        return
+    }
+
+    directMatch, vulnerable := isVulnerableCNAME(result.cname, fingerprints)
+    if directMatch {
+        foundMsg := fmt.Sprintf("CNAME for %s is: %s (found matching fingerprint - %s)", result.domain, result.cname, ifThenElse(vulnerable, "vulnerable", "safe"))
+        appendResultBasedOnVulnerability(vulnerable, foundMsg)
+    } else {
+        // Handle the case where the service might be identified by its second-level domain in the fingerprints
+        sld := extractServiceName(result.cname)
+        if serviceMatch, vulnerable, service := checkServiceVulnerabilityBySLD(sld, fingerprints); serviceMatch {
+            serviceMsg := fmt.Sprintf("CNAME for %s is: %s (found potentially matching service '%s' - %s)", result.domain, result.cname, service, ifThenElse(vulnerable, "vulnerable", "safe"))
+            appendResultBasedOnVulnerability(vulnerable, serviceMsg)
+        } else {
+            unknownMsg := fmt.Sprintf("CNAME for %s is: %s", result.domain, result.cname)
+            unknownExploitability = append(unknownExploitability, unknownMsg)
+        }
+    }
 }
