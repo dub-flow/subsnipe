@@ -127,12 +127,12 @@ func isServiceVulnerable(sld string, fingerprints map[string]map[string]interfac
 		service, ok := fingerprint["service"].(string)
 		if ok && strings.EqualFold(service, sld) {
 			fingerprintText := fingerprint["fingerprint"].(string)
-			hasNXDOMAINFlag := fingerprint["nxdomain"].(string)
-			
+			hasNXDOMAINFlag := fingerprint["nxdomain"].(bool)
+
 			return true, fingerprint["vulnerable"].(bool), service, fingerprintText, hasNXDOMAINFlag
 		}
 	}
-	return false, false, ""
+	return false, false, "", "", false
 }
 
 // Writes the extracted subdomains to the specified file
