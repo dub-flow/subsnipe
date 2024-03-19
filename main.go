@@ -263,19 +263,6 @@ func isVulnerableCNAME(cname string, fingerprints map[string]map[string]interfac
     return false, false // CNAME not found in fingerprints
 }
 
-// Check if a service by name is vulnerable
-func isServiceVulnerable(cname string, fingerprints map[string]map[string]interface{}) (bool, bool, string) {
-    // Extract the service name from the CNAME
-    serviceName := extractServiceName(cname)
-
-    for _, fingerprint := range fingerprints {
-        if fingerprintService, ok := fingerprint["service"].(string); ok && strings.EqualFold(serviceName, fingerprintService) {
-            return true, fingerprint["vulnerable"].(bool), fingerprintService
-        }
-    }
-    return false, false, ""
-}
-
 // processCNAMEResult processes each CNAME query result, checking against fingerprints and service names
 func processCNAMEResult(result cnameResult, fingerprints map[string]map[string]interface{}) {
     if result.err != nil || result.cname == "" {
@@ -292,7 +279,7 @@ func processCNAMEResult(result cnameResult, fingerprints map[string]map[string]i
     } else {
         // Handle the case where the service might be identified by its second-level domain in the fingerprints
         sld := extractServiceName(result.cname)
-        if serviceMatch, vulnerable, service := checkServiceVulnerabilityBySLD(sld, fingerprints); serviceMatch {
+        if serviceMatch, vulnerable, service := isServiceVulnerable(sld, fingerprints); serviceMatch {
             serviceMsg := fmt.Sprintf("CNAME for %s is: %s (found potentially matching service '%s' - %s)", result.domain, result.cname, service, ifThenElse(vulnerable, "vulnerable", "safe"))
             appendResultBasedOnVulnerability(vulnerable, serviceMsg)
         } else {

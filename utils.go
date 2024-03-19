@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/fatih/color"
 )
 
@@ -123,7 +122,7 @@ func extractServiceName(domain string) string {
 }
 
 // Check if the extracted SLD matches any service marked as vulnerable or safe in fingerprints.json
-func checkServiceVulnerabilityBySLD(sld string, fingerprints map[string]map[string]interface{}) (bool, bool, string) {
+func isServiceVulnerable(sld string, fingerprints map[string]map[string]interface{}) (bool, bool, string) {
 	for _, fingerprint := range fingerprints {
 		service, ok := fingerprint["service"].(string)
 		if ok && strings.EqualFold(service, sld) {
