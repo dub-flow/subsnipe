@@ -16,6 +16,9 @@ RUN CGO_ENABLED=0 go build -ldflags="-X main.AppVersion=$(cat VERSION) -s -w" -t
 # Second stage of multi-stage build: run the Go binary
 FROM alpine:latest
 
+# Install dig
+RUN apk --no-cache add bind-tools
+
 # An env variable because e.g. the output directory needs to be different when the tool runs in docker
 ENV RUNNING_ENVIRONMENT=docker
 

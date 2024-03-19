@@ -58,6 +58,11 @@ func run(cmd *cobra.Command, args []string) {
 	// check if a later version of this tool exists
 	NotifyOfUpdates()
 
+	if !checkDigAvailable() {
+        log.Fatal("The 'dig' command is not available. Please ensure it is installed.")
+		return
+    }
+
 	// if the app runs inside a docker container, the output has to be written into `./output/output.md`, because
 	// we will mount the CWD inside the container into `./output/` 
 	if os.Getenv("RUNNING_ENVIRONMENT") == "docker" {
@@ -75,7 +80,7 @@ func run(cmd *cobra.Command, args []string) {
 	}
 
 	log.Info("Checking subdomains for: ", domain)
-	queryCRTSH(domain, outputFileName)
+	queryCRTSH()
 }
 
 func printIntro() {
@@ -88,8 +93,14 @@ func printIntro() {
 	color.Green("##################################\n\n")
 }
 
+// Checks if the 'dig' command is available on the system
+func checkDigAvailable() bool {
+    _, err := exec.LookPath("dig")
+    return err == nil
+}
+
 // Queries crt.sh for subdomains of the given domain and writes unique common names to a file
-func queryCRTSH(domain string, outputFilePath string) {
+func queryCRTSH() {
 	log.Info("Querying crt.sh for subdomains... (may take a moment)")
 
 	url := fmt.Sprintf("https://crt.sh/?q=%s&output=json", domain)
@@ -121,7 +132,7 @@ func queryCRTSH(domain string, outputFilePath string) {
 	}
 
 	log.Info("Unique common names have been extracted to ", subdomainsFilePath)
-	checkCNAMEs(subdomainsFilePath, outputFilePath)
+	checkCNAMEs(subdomainsFilePath)
 }
 
 // Extracts unique common names from the JSON data returned by crt.sh
@@ -150,7 +161,7 @@ func writeSubdomainsToFile(subdomains map[string]bool, filename string) error {
 }
 
 // Reads subdomains from a file and queries for their CNAME records concurrently
-func checkCNAMEs(subdomainsFilePath string, outputFilePath string) {
+func checkCNAMEs(subdomainsFilePath string) {
 	log.Info("Querying CNAME records for subdomains...")
 
 	subdomainsFile, err := os.Open(subdomainsFilePath)
@@ -207,7 +218,7 @@ func checkCNAMEs(subdomainsFilePath string, outputFilePath string) {
 	close(results)
 
 	// Write results after processing
-	writeResults(outputFilePath)
+	writeResults()
 }
 
 // Performs a CNAME query for a given domain and sends the result to the results channel
@@ -238,13 +249,13 @@ func processResults(results <-chan cnameResult) {
 }
 
 // Writes the sorted CNAME query results to an output markdown file with categorization based on exploitability
-func writeResults(outputFilePath string) {
+func writeResults() {
     fingerprints, err := loadFingerprints(fingerprintsFile)
     if err != nil {
         log.Fatalf("Error loading fingerprints: %v", err)
     }
 
-    outputFile, err := os.Create(outputFilePath)
+    outputFile, err := os.Create(outputFileName)
     if err != nil {
         log.Fatalf("Error creating output file: %v", err)
     }

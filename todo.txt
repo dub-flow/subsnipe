@@ -1,3 +1,2 @@
 - Investigate this error that randomly happens from crt.sh: `Error unmarshaling JSON: invalid character '<' looking for beginning of value`
-- mark juicy domains
 - Also check the fingerprints that do not have the domain column (e.g. pantheon)
