@@ -17,11 +17,19 @@ Help is built-in!
 # How to Use ⚙
 
 ```text
-Usage:
-    subsnipe <domain>
+SubSnipe identifies potentially take-over-able subdomains
 
-Example:
-    ./subsnipe google.com
+Usage:
+  subsnipe [flags]
+
+Examples:
+./subsnipe -d test.com
+./subsnipe -d test.com -o ../output-dir
+
+Flags:
+  -d, --domain string   The domain to query for subdomains (required)
+  -h, --help            help for subsnipe
+  -o, --output string   The directory where the output file will be written (default ".")
 ```
 
 # Setup ✅
@@ -32,8 +40,10 @@ Example:
 
 # Run via Docker 🐳
 
-1. Traverse **into** the directory where you want the `output.md` to be stored to
-2. From within there, run `docker run -it --rm -v "$(pwd):/app/output" fw10/subsnipe <domain>`
+1. Traverse **into** the directory where you want the `output.md` to be stored to 
+    - Note that you cannot provide the `-output` paramter when running `SubSnipe` via docker
+    - The reason is that the directory for the `output.md` needs to be mounted into the container
+2. From within there, run `docker run -it --rm -v "$(pwd):/app/output" fw10/subsnipe -domain <domain>`
 
 # Bug Reports 🐞
 

@@ -3,18 +3,18 @@ package main
 import (
 	"bufio"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
-
 	"github.com/fatih/color"
+	"github.com/spf13/cobra"
 )
 
 // cnameResult stores the result of a CNAME query for a domain
@@ -25,37 +25,32 @@ type cnameResult struct {
 }
 
 var (
-	found    []string
-	notFound []string
+	found    		 []string
+	notFound 		 []string
+    outputFileName   string  	= "output.md"
+	domain           string
+	fingerprintsFile string 	= "./fingerprints/can-i-take-over-xyz_fingerprints.json"
 )
-
-var (
-    domainFlag *string
-    outputFlag *string
-)
-
-var fingerprintsFile string = "./fingerprints/can-i-take-over-xyz_fingerprints.json"
 
 func main() {
-	// Initialize flags
-	domainFlag = flag.String("domain", "", "The domain to query for subdomains")
-	outputFlag = flag.String("output", "./output.md", "The location where the output file will be written to")
-	flag.Parse()
-
-	// Check if domain is provided
-	if *domainFlag == "" {
-		fmt.Println("Error: Domain not specified")
-		flag.Usage()
-		return
+	var rootCmd = &cobra.Command{
+		Use:   "subsnipe [flags]",
+		Short: "SubSnipe identifies potentially take-over-able subdomains",
+		Example: `./subsnipe -d test.com`,
+		Run:   run,
 	}
 
+	rootCmd.Flags().StringVarP(&domain, "domain", "d", "", "The domain to query for subdomains (required)")
+	rootCmd.MarkFlagRequired("domain")
+
+	if err := rootCmd.Execute(); err != nil {
+		log.Fatalf("Error executing subSnipe: %s", err)
+	}
+}
+
+func run(cmd *cobra.Command, args []string) {
 	printIntro()
-
-	domain := *domainFlag
-    outputFilePath := *outputFlag
-	log.Info("Checking subdomains for: ", domain)
-	log.Info("Provided output file: ", outputFilePath)
-
+	
 	// Check if the AppVersion was already set during compilation - otherwise manually get it from `./VERSION`
 	CheckAppVersion()
 	color.Yellow("Current version: %s\n\n", AppVersion)
@@ -63,21 +58,25 @@ func main() {
 	// check if a later version of this tool exists
 	NotifyOfUpdates()
 
+	// if the app runs inside a docker container, the output has to be written into `./output/output.md`, because
+	// we will mount the CWD inside the container into `/app/output/` 
+	if os.Getenv("RUNNING_ENVIRONMENT") == "docker" {
+		dockerOutputPath := "/app/output"
+		outputFileName = filepath.Join(dockerOutputPath, outputFileName)
+	}
+
 	// Check if https://github.com/EdOverflow/can-i-take-over-xyz/blob/master/fingerprints.json differs from the local copy in
 	// ./fingerprints/can-i-take-over-xyz_fingerprints.json (i.e., has been updated). If so, update our local copy
-	log.Info("Checking for new fingerprints (this tool uses https://github.com/EdOverflow/can-i-take-over-xyz to determine subdomains that can be taken over)")
-	updated, err := updateFingerprints()
-	if err != nil {
+	if updated, err := updateFingerprints(); err != nil {
 		log.Error("Error updating fingerprints:", err)
-		return
-	}
-	if updated {
+	} else if updated {
 		log.Info("Fingerprints updated")
 	} else {
 		log.Info("Fingerprints are already up to date")
 	}
 
-	queryCRTSH(domain, outputFilePath)
+	log.Info("Checking subdomains for: ", domain)
+	queryCRTSH(domain, outputFileName)
 }
 
 func printIntro() {
