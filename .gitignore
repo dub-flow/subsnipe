@@ -25,5 +25,6 @@ crt-subdomains.txt
 output.md
 releases/
 subsnipe
+subdomains.txt
 
 .DS_Store

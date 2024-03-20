@@ -24,10 +24,12 @@ Usage:
 
 Examples:
 ./subsnipe -d test.com
+./subsnipe -f subdomains.txt
 
 Flags:
-  -d, --domain string   The domain to query for subdomains (required)
-  -h, --help            help for subsnipe
+  -d, --domain string       The domain to query for subdomains
+  -h, --help                help for subsnipe
+  -f, --subdomains string   Path to the file containing subdomains to query (subdomains are separated by new lines)
 ```
 
 # Setup ✅
