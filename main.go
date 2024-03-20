@@ -28,6 +28,7 @@ type cnameResult struct {
 var (
     outputFileName   	  string  	= "output.md"
 	domain           	  string
+	subdomainsFile		  string
 	isExploitable         []string
 	notExploitable        []string
 	unknownExploitability []string
@@ -38,12 +39,13 @@ func main() {
 	var rootCmd = &cobra.Command{
 		Use:   "subsnipe [flags]",
 		Short: "SubSnipe identifies potentially take-over-able subdomains",
-		Example: `./subsnipe -d test.com`,
+		Example: `./subsnipe -d test.com
+./subsnipe -f subdomains.txt`,
 		Run:   run,
 	}
 
-	rootCmd.Flags().StringVarP(&domain, "domain", "d", "", "The domain to query for subdomains (required)")
-	rootCmd.MarkFlagRequired("domain")
+	rootCmd.Flags().StringVarP(&domain, "domain", "d", "", "The domain to query for subdomains")
+	rootCmd.Flags().StringVarP(&subdomainsFile, "subdomains", "f", "", "Path to the file containing subdomains to query (subdomains are separated by new lines)")
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatalf("Error executing subSnipe: %s", err)
@@ -56,6 +58,11 @@ func run(cmd *cobra.Command, args []string) {
 	// Check if the AppVersion was already set during compilation - otherwise manually get it from `./VERSION`
 	CheckAppVersion()
 	color.Yellow("Current version: %s\n\n", AppVersion)
+
+	// Check if either 'domain' or 'subdomainsFile' were provided
+	if (domain == "" && subdomainsFile == "") || (domain != "" && subdomainsFile != "") {
+		log.Fatalf("Please either provide a domain (-d <domain>) or a file with subdomains (-f <filename>)")
+	}
 
 	// check if a later version of this tool exists
 	NotifyOfUpdates()
@@ -81,8 +88,25 @@ func run(cmd *cobra.Command, args []string) {
 		log.Info("Fingerprints are already up to date")
 	}
 
+    var subdomainsFilePath string
+	// if the 'subdomainsFile' flag was provided 
+    if subdomainsFile != "" {
+		    // Check if the subdomains file exists
+			if _, err := os.Stat(subdomainsFile); os.IsNotExist(err) {
+				// If the file does not exist, log an error and exit
+				log.Fatalf("The specified file with subdomains does not exist: %s", subdomainsFile)
+			}
+			// If the file exists, use its path directly
+			subdomainsFilePath = subdomainsFile
+    } else if domain != "" {
+        // Query crt.sh if a domain is provided
+        queryCRTSH()
+        subdomainsFilePath = "crt-subdomains.txt"
+    }
+
 	log.Info("Checking subdomains for: ", domain)
-	queryCRTSH()
+
+    checkCNAMEs(subdomainsFilePath)
 }
 
 // Queries crt.sh for subdomains of the given domain and writes unique common names to a file
@@ -118,7 +142,6 @@ func queryCRTSH() {
 	}
 
 	log.Info("Unique common names have been extracted to ", subdomainsFilePath)
-	checkCNAMEs(subdomainsFilePath)
 }
 
 // Reads subdomains from a file and queries for their CNAME records concurrently
