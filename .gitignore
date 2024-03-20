@@ -24,5 +24,6 @@ go.work
 crt-subdomains.txt
 output.md
 releases/
+subsnipe
 
 .DS_Store

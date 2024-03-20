@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -46,13 +46,13 @@ func updateFingerprints() (bool, error) {
 	}
 
 	// Read the content of the remote file
-	remoteContent, err := ioutil.ReadAll(resp.Body)
+	remoteContent, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return false, fmt.Errorf("error reading remote content: %v", err)
 	}
 
 	// Read the content of the local file, if it exists
-	localContent, err := ioutil.ReadFile(fingerprintsFile)
+	localContent, err := os.ReadFile(fingerprintsFile)
 	if err != nil && !os.IsNotExist(err) {
 		return false, fmt.Errorf("error reading local file: %v", err)
 	}
@@ -60,7 +60,7 @@ func updateFingerprints() (bool, error) {
 	// Compare the content of the remote and local files
 	if string(remoteContent) != string(localContent) {
 		// Write the fetched content to the local file
-		err := ioutil.WriteFile(fingerprintsFile, remoteContent, 0644)
+		err := os.WriteFile(fingerprintsFile, remoteContent, 0644)
 		if err != nil {
 			return false, fmt.Errorf("error writing to local file: %v", err)
 		}
@@ -73,7 +73,7 @@ func updateFingerprints() (bool, error) {
 // Loads fingerprints from the specified file into a map
 func loadFingerprints(filename string) (map[string]map[string]interface{}, error) {
     var fingerprints []map[string]interface{}
-    fingerprintData, err := ioutil.ReadFile(filename)
+    fingerprintData, err := os.ReadFile(filename)
     if err != nil {
         return nil, err
     }

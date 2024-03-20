@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -26,8 +26,6 @@ type cnameResult struct {
 }
 
 var (
-	found    		 	  []string
-	notFound 		 	  []string
     outputFileName   	  string  	= "output.md"
 	domain           	  string
 	isExploitable         []string
@@ -99,7 +97,7 @@ func queryCRTSH() {
 	}
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Error("Error reading response body: ", err)
 		return
@@ -193,23 +191,6 @@ func queryAndSendCNAME(domain string, results chan<- cnameResult) {
     }
 }
 
-// Processes CNAME query results from the results channel, sorting them into found and not found
-func processResults(results <-chan cnameResult) {
-	for result := range results {
-		if result.err != nil || result.cname == "" {
-			notFoundMsg := fmt.Sprintf("No CNAME record found for: %s", result.domain)
-			log.Warnf(notFoundMsg)
-			notFound = append(notFound, notFoundMsg)
-		} else {
-			foundMsg := fmt.Sprintf("CNAME for %s is: %s", result.domain, result.cname)
-			log.Infof(foundMsg)
-			found = append(found, foundMsg)
-		}
-	}
-
-	log.Info("... Finished querying CNAMEs")
-}
-
 // Writes the sorted CNAME query results to an output markdown file with categorization based on exploitability
 func writeResults() {
     outputFile, err := os.Create(outputFileName)
@@ -252,7 +233,6 @@ func processCNAMEResult(result cnameResult, fingerprints map[string]map[string]i
     if result.err != nil || result.cname == "" {
         notFoundMsg := fmt.Sprintf("No CNAME record found for: %s", result.domain)
         log.Warnf(notFoundMsg)
-        notFound = append(notFound, notFoundMsg)
         return
     }
 
@@ -331,7 +311,7 @@ func checkTakeoverHTTP(cname string, fingerprintText string) bool {
 	}
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Errorf("Error reading response body from %s: %v", url, err)
 		return false
