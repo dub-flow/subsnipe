@@ -260,8 +260,8 @@ func processCNAMEResult(result cnameResult, fingerprints map[string]map[string]i
     directMatch, vulnerable, fingerprintText, hasNXDOMAINFlag := isVulnerableCNAME(result.cname, fingerprints)
 
     if directMatch { 
-		// If the TLD of the queried CNAME exists in our fingerprints
-		if checkTakeover(result.cname, fingerprintText, hasNXDOMAINFlag) { 
+		// If the TLD of the queried CNAME exists in our fingerprints and it flagged as 'vulnerable: true', we check for takeover
+		if checkTakeover(result.cname, fingerprintText, hasNXDOMAINFlag) && vulnerable { 
 			// try to fingerprint the CNAME to se if a domain takeover is likely
 			serviceMsg := fmt.Sprintf("CNAME for %s is: %s (found matching fingerprint '%s') -> `Takeover Likely Possible!`", result.domain, result.cname, ifThenElse(vulnerable, "vulnerable", "safe"))
 			appendResultBasedOnVulnerability(vulnerable, serviceMsg)
@@ -273,7 +273,8 @@ func processCNAMEResult(result cnameResult, fingerprints map[string]map[string]i
         // Handle the case where the service might be identified by its second-level domain in the fingerprints
         sld := extractServiceName(result.cname)
         if serviceMatch, vulnerable, service, fingerprintText, hasNXDOMAINFlag := isServiceVulnerable(sld, fingerprints); serviceMatch {
-			if checkTakeover(result.cname, fingerprintText, hasNXDOMAINFlag) { 
+			// If we could potentially fingerprint the service, and it's flagged as 'vulnerable: true', we check for takeover
+			if checkTakeover(result.cname, fingerprintText, hasNXDOMAINFlag) && vulnerable { 
 				// try to fingerprint the CNAME to se if a domain takeover is likely
 				serviceMsg := fmt.Sprintf("CNAME for %s is: %s (found potentially matching service '%s' - %s) -> Takeover Likely Possible!", result.domain, result.cname, service, ifThenElse(vulnerable, "vulnerable", "safe"))
 				appendResultBasedOnVulnerability(vulnerable, serviceMsg)
