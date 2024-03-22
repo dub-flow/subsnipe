@@ -52,6 +52,10 @@ Flags:
 
 Note that the docker version of the app is very slow at the moment (which is something I plan to look into eventually - I assume it's a network latency thing)
 
+# Run Tests 🧪
+
+- To run the tests, run `go test` or `go test -v` (for more details)
+
 # Example Output 📋
 
 ```
