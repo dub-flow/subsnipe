@@ -265,7 +265,7 @@ func processCNAMEResult(result cnameResult, fingerprints map[string]map[string]i
     if directMatch { 
 		// If the TLD of the queried CNAME exists in our fingerprints and it flagged as 'vulnerable: true', we check for takeover
 		if checkTakeover(result.cname, fingerprintText, hasNXDOMAINFlag) && vulnerable { 
-			log.Infof("+++ It's likely possible to takeover CNAME: %s +++", cname)
+			log.Infof("+++ It's likely possible to takeover CNAME: %s +++", result.cname)
 			serviceMsg := fmt.Sprintf("CNAME for %s is: %s (found matching fingerprint '%s') -> `Takeover Likely Possible!`", result.domain, result.cname, ifThenElse(vulnerable, "vulnerable", "safe"))
 			appendResultBasedOnVulnerability(vulnerable, serviceMsg)
 		} else {
@@ -278,7 +278,7 @@ func processCNAMEResult(result cnameResult, fingerprints map[string]map[string]i
         if serviceMatch, vulnerable, service, fingerprintText, hasNXDOMAINFlag := isServiceVulnerable(sld, fingerprints); serviceMatch {
 			// If we could potentially fingerprint the service, and it's flagged as 'vulnerable: true', we check for takeover
 			if checkTakeover(result.cname, fingerprintText, hasNXDOMAINFlag) && vulnerable { 
-				log.Infof("+++ It's likely possible to takeover CNAME: %s +++", cname)
+				log.Infof("+++ It's likely possible to takeover CNAME: %s +++", result.cname)
 				serviceMsg := fmt.Sprintf("CNAME for %s is: %s (found potentially matching service '%s' - %s) -> Takeover Likely Possible!", result.domain, result.cname, service, ifThenElse(vulnerable, "vulnerable", "safe"))
 				appendResultBasedOnVulnerability(vulnerable, serviceMsg)
 			} else { 
