@@ -1,7 +1,8 @@
 package main
 
 import (
-	"net/http"
+	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/jarcoal/httpmock"
@@ -30,4 +31,25 @@ func TestQueryCRTSH(t *testing.T) {
 	
 	// Clean up the generated file
 	os.Remove("crt-subdomains.txt")
+}
+
+func TestIsVulnerableCNAME_Vulnerable(t *testing.T) {
+	// Setup a mock fingerprints data
+	fingerprints := map[string]map[string]interface{}{
+		"vulnerable.com": {
+			"cname":        []interface{}{"vulnerable.com"},
+			"vulnerable":   true,
+			"fingerprint":  "Vulnerable Service",
+			"nxdomain":     false,
+		},
+	}
+
+	// Test a vulnerable CNAME
+	vulnerableCNAME := "subdomain.vulnerable.com."
+	directMatch, vulnerable, fingerprintText, hasNXDOMAINFlag := isVulnerableCNAME(vulnerableCNAME, fingerprints)
+
+	assert.True(t, directMatch, "Expected a direct match for the CNAME")
+	assert.True(t, vulnerable, "Expected the CNAME to be vulnerable")
+	assert.Equal(t, "Vulnerable Service", fingerprintText, "Expected the correct fingerprint text")
+	assert.False(t, hasNXDOMAINFlag, "Expected the NXDOMAIN flag to be false")
 }
