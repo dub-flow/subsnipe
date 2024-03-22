@@ -5,7 +5,11 @@ FROM golang:alpine AS builder
 WORKDIR /build
 
 # Copy everything inside the container
-COPY . .
+COPY go.mod .
+COPY go.sum .
+COPY *.go .
+COPY VERSION .
+COPY fingerprints ./fingerprints
 
 # Download all dependencies
 RUN go mod download
