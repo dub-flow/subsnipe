@@ -43,14 +43,12 @@ Flags:
 
 - You can simply run this tool from source via `go run .` 
 - You can build the tool yourself via `go build`
-- You can build the `docker` image yourself via `docker build . -t fw10/subsnipe`
+- You can also build the `docker` image yourself via `docker build . -t fw10/subsnipe`
 
-# Run via Docker 🐳
+# Run via Docker (Only 1 Command!)  🐳
 
 1. Traverse **into** the directory where you want the `output.md` to be stored to 
-    - Note that you cannot provide the `-output` paramter when running `SubSnipe` via docker
-    - The reason is that the directory for the `output.md` needs to be mounted into the container
-2. From within there, run `docker run -it --rm -v "$(pwd):/app/output" fw10/subsnipe -d <domain>`
+2. Run `docker run -it --rm -v "$(pwd):/app/output" fw10/subsnipe [flags]`
 
 Note that the docker version of the app is very slow at the moment (which I presume is related to network latency when doing all the DNS lookups).
 
