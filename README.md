@@ -29,12 +29,14 @@ Usage:
 
 Examples:
 ./subsnipe -d test.com
+./subsnipe -d test.com --threads 50
 ./subsnipe -f subdomains.txt
 
 Flags:
   -d, --domain string       The domain to query for subdomains
   -h, --help                help for subsnipe
   -f, --subdomains string   Path to the file containing subdomains to query (subdomains are separated by new lines)
+  -t, --threads int          Number of concurrent threads for CNAME checks (default 30)
 ```
 
 # Setup ✅

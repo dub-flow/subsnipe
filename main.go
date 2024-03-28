@@ -13,8 +13,8 @@ import (
 	"strings"
 	"sync"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/fatih/color"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -26,9 +26,10 @@ type cnameResult struct {
 }
 
 var (
-    outputFileName   	  string  	= "output.md"
-	domain           	  string
-	subdomainsFile		  string
+	outputFileName        string = "output.md"
+	domain                string
+	threads               int
+	subdomainsFile        string
 	isExploitable         []string
 	notExploitable        []string
 	unknownExploitability []string
@@ -40,12 +41,14 @@ func main() {
 		Use:   "subsnipe [flags]",
 		Short: "SubSnipe identifies potentially take-over-able subdomains",
 		Example: `./subsnipe -d test.com
+./subsnipe -d test.com --threads 50
 ./subsnipe -f subdomains.txt`,
-		Run:   run,
+		Run: run,
 	}
 
 	rootCmd.Flags().StringVarP(&domain, "domain", "d", "", "The domain to query for subdomains")
 	rootCmd.Flags().StringVarP(&subdomainsFile, "subdomains", "f", "", "Path to the file containing subdomains to query (subdomains are separated by new lines)")
+	rootCmd.Flags().IntVarP(&threads, "threads", "t", 30, "Number of concurrent threads for CNAME checks")
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatalf("Error executing subSnipe: %s", err)
@@ -54,7 +57,7 @@ func main() {
 
 func run(cmd *cobra.Command, args []string) {
 	printIntro()
-	
+
 	// Check if the AppVersion was already set during compilation - otherwise manually get it from `./VERSION`
 	CheckAppVersion()
 	color.Yellow("Current version: %s\n\n", AppVersion)
@@ -68,12 +71,12 @@ func run(cmd *cobra.Command, args []string) {
 	NotifyOfUpdates()
 
 	if !checkDigAvailable() {
-        log.Fatal("The 'dig' command is not available. Please ensure it is installed.")
+		log.Fatal("The 'dig' command is not available. Please ensure it is installed.")
 		return
-    }
+	}
 
 	// if the app runs inside a docker container, the output has to be written into `./output/output.md`, because
-	// we will mount the CWD inside the container into `./output/` 
+	// we will mount the CWD inside the container into `./output/`
 	if os.Getenv("RUNNING_ENVIRONMENT") == "docker" {
 		outputFileName = filepath.Join("output", outputFileName)
 	}
@@ -88,25 +91,25 @@ func run(cmd *cobra.Command, args []string) {
 		log.Info("Fingerprints are already up to date")
 	}
 
-    var subdomainsFilePath string
-	// if the 'subdomainsFile' flag was provided 
-    if subdomainsFile != "" {
-		    // Check if the subdomains file exists
-			if _, err := os.Stat(subdomainsFile); os.IsNotExist(err) {
-				// If the file does not exist, log an error and exit
-				log.Fatalf("The specified file with subdomains does not exist: %s", subdomainsFile)
-			}
-			// If the file exists, use its path directly
-			subdomainsFilePath = subdomainsFile
-    } else if domain != "" {
-        // Query crt.sh if a domain is provided
-        queryCRTSH()
-        subdomainsFilePath = "crt-subdomains.txt"
-    }
+	var subdomainsFilePath string
+	// if the 'subdomainsFile' flag was provided
+	if subdomainsFile != "" {
+		// Check if the subdomains file exists
+		if _, err := os.Stat(subdomainsFile); os.IsNotExist(err) {
+			// If the file does not exist, log an error and exit
+			log.Fatalf("The specified file with subdomains does not exist: %s", subdomainsFile)
+		}
+		// If the file exists, use its path directly
+		subdomainsFilePath = subdomainsFile
+	} else if domain != "" {
+		// Query crt.sh if a domain is provided
+		queryCRTSH()
+		subdomainsFilePath = "crt-subdomains.txt"
+	}
 
 	log.Info("Checking subdomains for: ", domain)
 
-    checkCNAMEs(subdomainsFilePath)
+	checkCNAMEs(subdomainsFilePath)
 }
 
 // Queries crt.sh for subdomains of the given domain and writes unique common names to a file
@@ -146,125 +149,123 @@ func queryCRTSH() {
 
 // Reads subdomains from a file and queries for their CNAME records concurrently
 func checkCNAMEs(subdomainsFilePath string) {
-    log.Info("Querying CNAME records for subdomains...")
+	log.Info("Querying CNAME records for subdomains...")
 
-    subdomainsFile, err := os.Open(subdomainsFilePath)
-    if err != nil {
-        log.Error("Error opening file: ", err)
-        return
-    }
-    defer subdomainsFile.Close()
+	subdomainsFile, err := os.Open(subdomainsFilePath)
+	if err != nil {
+		log.Error("Error opening file: ", err)
+		return
+	}
+	defer subdomainsFile.Close()
 
-    scanner := bufio.NewScanner(subdomainsFile)
-    var wg sync.WaitGroup
-    results := make(chan cnameResult, 100) // Buffer may be adjusted based on expected concurrency
+	scanner := bufio.NewScanner(subdomainsFile)
+	var wg sync.WaitGroup
+	results := make(chan cnameResult, 100) // Buffer may be adjusted based on expected concurrency
+	sem := make(chan struct{}, threads) // Control concurrency with a semaphore
 
-    maxConcurrency := 20
-    sem := make(chan struct{}, maxConcurrency) // Control concurrency with a semaphore
+	fingerprints, err := loadFingerprints(fingerprintsFile)
+	if err != nil {
+		log.Fatalf("Error loading fingerprints: %v", err)
+	}
 
-    fingerprints, err := loadFingerprints(fingerprintsFile)
-    if err != nil {
-        log.Fatalf("Error loading fingerprints: %v", err)
-    }
+	// Launch a goroutine to process results concurrently
+	go func() {
+		for result := range results {
+			processCNAMEResult(result, fingerprints)
+		}
+	}()
 
-    // Launch a goroutine to process results concurrently
-    go func() {
-        for result := range results {
-            processCNAMEResult(result, fingerprints)
-        }
-    }()
+	for scanner.Scan() {
+		domain := scanner.Text()
+		wg.Add(1)
+		sem <- struct{}{} // Acquire semaphore
 
-    for scanner.Scan() {
-        domain := scanner.Text()
-        wg.Add(1)
-        sem <- struct{}{} // Acquire semaphore
+		// Launch a goroutine for each CNAME query
+		go func(domain string) {
+			defer wg.Done()
+			defer func() { <-sem }() // Release semaphore
+			queryAndSendCNAME(domain, results)
+		}(domain)
+	}
 
-        // Launch a goroutine for each CNAME query
-        go func(domain string) {
-            defer wg.Done()
-            defer func() { <-sem }() // Release semaphore
-            queryAndSendCNAME(domain, results)
-        }(domain)
-    }
+	if err := scanner.Err(); err != nil {
+		log.Error("Error reading from file: ", err)
+		return
+	}
 
-    if err := scanner.Err(); err != nil {
-        log.Error("Error reading from file: ", err)
-        return
-    }
+	// Wait for all queries to finish
+	wg.Wait()
 
-    // Wait for all queries to finish
-    wg.Wait()
+	// Close the results channel after all queries are complete
+	close(results)
 
-    // Close the results channel after all queries are complete
-    close(results)
-
-    // Write results after processing
-    writeResults()
+	// Write results after processing
+	writeResults()
 }
 
 // Performs a CNAME query for a given domain and sends the result to the results channel
 func queryAndSendCNAME(domain string, results chan<- cnameResult) {
-    cname, err := exec.Command("dig", "+short", "CNAME", domain).Output()
-    if err != nil || len(cname) == 0 {
-        results <- cnameResult{domain: domain, err: fmt.Errorf("no CNAME record found or dig command failed")}
-    } else {
-        // Log the found CNAME
-        log.Infof("CNAME found for %s is: %s", domain, strings.TrimSpace(string(cname)))
-        results <- cnameResult{domain: domain, cname: strings.TrimSpace(string(cname))}
-    }
+	cname, err := exec.Command("dig", "+short", "CNAME", domain).Output()
+	if err != nil || len(cname) == 0 {
+		results <- cnameResult{domain: domain, err: fmt.Errorf("no CNAME record found or dig command failed")}
+	} else {
+		// Log the found CNAME
+		log.Infof("CNAME found for %s is: %s", domain, strings.TrimSpace(string(cname)))
+		results <- cnameResult{domain: domain, cname: strings.TrimSpace(string(cname))}
+	}
 }
 
 // Writes the sorted CNAME query results to an output markdown file with categorization based on exploitability
 func writeResults() {
-    outputFile, err := os.Create(outputFileName)
-    if err != nil {
-        log.Fatalf("Error creating output file: %v", err)
-    }
-    defer outputFile.Close()
+	outputFile, err := os.Create(outputFileName)
+	if err != nil {
+		log.Fatalf("Error creating output file: %v", err)
+	}
+	defer outputFile.Close()
 
-    // Writing Is Exploitable section
-    if len(isExploitable) > 0 {
-        outputFile.WriteString("### Is Exploitable\n\n")
-        for _, item := range isExploitable {
-            outputFile.WriteString("- " + item + "\n")
-        }
-        outputFile.WriteString("\n")
-    }
+	// Writing Is Exploitable section
+	if len(isExploitable) > 0 {
+		outputFile.WriteString("### Is Exploitable\n\n")
+		for _, item := range isExploitable {
+			outputFile.WriteString("- " + item + "\n")
+		}
+		outputFile.WriteString("\n")
+	}
 
-    // Writing Not Exploitable section
-    if len(notExploitable) > 0 {
-        outputFile.WriteString("### Not Exploitable\n\n")
-        for _, item := range notExploitable {
-            outputFile.WriteString("- " + item + "\n")
-        }
-        outputFile.WriteString("\n")
-    }
+	// Writing Not Exploitable section
+	if len(notExploitable) > 0 {
+		outputFile.WriteString("### Not Exploitable\n\n")
+		for _, item := range notExploitable {
+			outputFile.WriteString("- " + item + "\n")
+		}
+		outputFile.WriteString("\n")
+	}
 
-    // Writing Exploitability Unknown section
-    if len(unknownExploitability) > 0 {
-        outputFile.WriteString("### Exploitability Unknown\n\n")
-        for _, item := range unknownExploitability {
-            outputFile.WriteString("- " + item + "\n")
-        }
-    }
+	// Writing Exploitability Unknown section
+	if len(unknownExploitability) > 0 {
+		outputFile.WriteString("### Exploitability Unknown\n\n")
+		for _, item := range unknownExploitability {
+			outputFile.WriteString("- " + item + "\n")
+		}
+	}
 
-    log.Println("Results have been written to", outputFileName)
+	log.Println("Results have been written to", outputFileName)
 }
 
 // Processes each CNAME query result, checking against fingerprints and service names
 func processCNAMEResult(result cnameResult, fingerprints map[string]map[string]interface{}) {
-    if result.err != nil || result.cname == "" {
-        notFoundMsg := fmt.Sprintf("No CNAME record found for: %s", result.domain)
-        log.Warnf(notFoundMsg)
-        return
-    }
+	if result.err != nil || result.cname == "" {
+		notFoundMsg := fmt.Sprintf("No CNAME record found for: %s", result.domain)
+		log.Warnf(notFoundMsg)
+		return
+	}
 
 	// Check our fingerprints if the CNAME is known to be vulnerable to takeover
-    directMatch, vulnerable, fingerprintText, hasNXDOMAINFlag := isVulnerableCNAME(result.cname, fingerprints)
+	directMatch, vulnerable, fingerprintText, hasNXDOMAINFlag := isVulnerableCNAME(result.cname, fingerprints)
 
-    if directMatch { 
+	if directMatch {
 		// If the TLD of the queried CNAME exists in our fingerprints and it flagged as 'vulnerable: true', we check for takeover
-		if checkTakeover(result.cname, fingerprintText, hasNXDOMAINFlag) && vulnerable { 
+		if checkTakeover(result.cname, fingerprintText, hasNXDOMAINFlag) && vulnerable {
 			log.Infof("+++ It's likely possible to takeover CNAME: %s +++", result.cname)
 			serviceMsg := fmt.Sprintf("CNAME for %s is: %s (found matching fingerprint '%s') -> `Takeover Likely Possible!`", result.domain, result.cname, ifThenElse(vulnerable, "vulnerable", "safe"))
 			appendResultBasedOnVulnerability(vulnerable, serviceMsg)
@@ -272,25 +273,25 @@ func processCNAMEResult(result cnameResult, fingerprints map[string]map[string]i
 			foundMsg := fmt.Sprintf("CNAME for %s is: %s (found matching fingerprint - %s)", result.domain, result.cname, ifThenElse(vulnerable, "vulnerable", "safe"))
 			appendResultBasedOnVulnerability(vulnerable, foundMsg)
 		}
-    } else {
-        // Handle the case where the service might be identified by its second-level domain in the fingerprints
-        sld := extractServiceName(result.cname)
-        if serviceMatch, vulnerable, service, fingerprintText, hasNXDOMAINFlag := isServiceVulnerable(sld, fingerprints); serviceMatch {
+	} else {
+		// Handle the case where the service might be identified by its second-level domain in the fingerprints
+		sld := extractServiceName(result.cname)
+		if serviceMatch, vulnerable, service, fingerprintText, hasNXDOMAINFlag := isServiceVulnerable(sld, fingerprints); serviceMatch {
 			// If we could potentially fingerprint the service, and it's flagged as 'vulnerable: true', we check for takeover
-			if checkTakeover(result.cname, fingerprintText, hasNXDOMAINFlag) && vulnerable { 
+			if checkTakeover(result.cname, fingerprintText, hasNXDOMAINFlag) && vulnerable {
 				log.Infof("+++ It's likely possible to takeover CNAME: %s +++", result.cname)
 				serviceMsg := fmt.Sprintf("CNAME for %s is: %s (found potentially matching service '%s' - %s) -> Takeover Likely Possible!", result.domain, result.cname, service, ifThenElse(vulnerable, "vulnerable", "safe"))
 				appendResultBasedOnVulnerability(vulnerable, serviceMsg)
-			} else { 
+			} else {
 				serviceMsg := fmt.Sprintf("CNAME for %s is: %s (found potentially matching service '%s' - %s)", result.domain, result.cname, service, ifThenElse(vulnerable, "vulnerable", "safe"))
 				appendResultBasedOnVulnerability(vulnerable, serviceMsg)
 			}
 
-        } else {
-            unknownMsg := fmt.Sprintf("CNAME for %s is: %s", result.domain, result.cname)
-            unknownExploitability = append(unknownExploitability, unknownMsg)
-        }
-    }
+		} else {
+			unknownMsg := fmt.Sprintf("CNAME for %s is: %s", result.domain, result.cname)
+			unknownExploitability = append(unknownExploitability, unknownMsg)
+		}
+	}
 }
 
 // Checks if the domain pointed by the CNAME is take-over-able
