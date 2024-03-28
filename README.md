@@ -52,7 +52,7 @@ Flags:
     - The reason is that the directory for the `output.md` needs to be mounted into the container
 2. From within there, run `docker run -it --rm -v "$(pwd):/app/output" fw10/subsnipe -d <domain>`
 
-Note that the docker version of the app is very slow at the moment (which is something I plan to look into eventually - I assume it's a network latency thing)
+Note that the docker version of the app is very slow at the moment (which I presume is related to network latency when doing all the DNS lookups).
 
 # Run Tests 🧪
 
