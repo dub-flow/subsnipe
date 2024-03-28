@@ -46,7 +46,7 @@ Flags:
 - You can build the tool yourself via `go build`
 - You can also build the `docker` image yourself via `docker build . -t fw10/subsnipe`
 
-# Run via Docker (Only 1 Command!)  🐳
+# Run via Docker 🐳 (Only 1 Command!)  
 
 1. Traverse **into** the directory where you want the `output.md` to be stored to 
 2. Run `docker run -it --rm -v "$(pwd):/app/output" fw10/subsnipe [flags]`
