@@ -1,4 +1,5 @@
 ![Go Version](https://img.shields.io/github/go-mod/go-version/dub-flow/subsnipe)
+![Docker Image Size](https://img.shields.io/docker/image-size/fw10/subsnipe/latest)
 
 # SubSnipe 🚀⚡
 
