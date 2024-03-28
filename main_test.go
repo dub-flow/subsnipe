@@ -1,7 +1,6 @@
 package main
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -25,10 +24,10 @@ func TestQueryCRTSH(t *testing.T) {
 	queryCRTSH()
 
 	// Verify that the "crt-subdomains.txt" file is created and contains the expected content
-	content, err := ioutil.ReadFile("crt-subdomains.txt")
+	content, err := os.ReadFile("crt-subdomains.txt")
 	assert.NoError(t, err, "Expected no error reading the crt-subdomains.txt file")
 	assert.Contains(t, string(content), "subdomain.test.com", "The file should contain the subdomain 'subdomain.test.com'")
-	
+
 	// Clean up the generated file
 	os.Remove("crt-subdomains.txt")
 }
@@ -37,10 +36,10 @@ func TestIsVulnerableCNAME_Vulnerable(t *testing.T) {
 	// Setup a mock fingerprints data
 	fingerprints := map[string]map[string]interface{}{
 		"vulnerable.com": {
-			"cname":        []interface{}{"vulnerable.com"},
-			"vulnerable":   true,
-			"fingerprint":  "Vulnerable Service",
-			"nxdomain":     false,
+			"cname":       []interface{}{"vulnerable.com"},
+			"vulnerable":  true,
+			"fingerprint": "Vulnerable Service",
+			"nxdomain":    false,
 		},
 	}
 
@@ -58,16 +57,16 @@ func TestIsVulnerableCNAME_NotVulnerable(t *testing.T) {
 	// Setup mock fingerprints data including both vulnerable and non-vulnerable entries
 	fingerprints := map[string]map[string]interface{}{
 		"vulnerable.com": {
-			"cname":        []interface{}{"vulnerable.com"},
-			"vulnerable":   true,
-			"fingerprint":  "Vulnerable Service",
-			"nxdomain":     false,
+			"cname":       []interface{}{"vulnerable.com"},
+			"vulnerable":  true,
+			"fingerprint": "Vulnerable Service",
+			"nxdomain":    false,
 		},
 		"safe.com": {
-			"cname":        []interface{}{"safe.com"},
-			"vulnerable":   false,
-			"fingerprint":  "Safe Service",
-			"nxdomain":     false,
+			"cname":       []interface{}{"safe.com"},
+			"vulnerable":  false,
+			"fingerprint": "Safe Service",
+			"nxdomain":    false,
 		},
 	}
 
@@ -86,10 +85,10 @@ func TestIsVulnerableCNAME_NotFound(t *testing.T) {
 	// Setup mock fingerprints data
 	fingerprints := map[string]map[string]interface{}{
 		"vulnerable.com": {
-			"cname":        []interface{}{"vulnerable.com"},
-			"vulnerable":   true,
-			"fingerprint":  "Vulnerable Service",
-			"nxdomain":     false,
+			"cname":       []interface{}{"vulnerable.com"},
+			"vulnerable":  true,
+			"fingerprint": "Vulnerable Service",
+			"nxdomain":    false,
 		},
 	}
 
@@ -105,9 +104,9 @@ func TestIsVulnerableCNAME_NotFound(t *testing.T) {
 
 func TestExtractServiceName(t *testing.T) {
 	tests := []struct {
-		name         string
-		domain       string
-		expectedSLD  string
+		name        string
+		domain      string
+		expectedSLD string
 	}{
 		{"WithSubdomain", "sub.example.com.", "example"},
 		{"WithMultipleSubdomains", "deep.sub.example.com.", "example"},
@@ -136,5 +135,5 @@ func TestAppendResultBasedOnVulnerability(t *testing.T) {
 	// Test adding a non-vulnerable subdomain
 	appendResultBasedOnVulnerability(false, "safe.example.com")
 	assert.
-	Contains(t, notExploitable, "safe.example.com", "The non-vulnerable domain should be added to the notExploitable list")
+		Contains(t, notExploitable, "safe.example.com", "The non-vulnerable domain should be added to the notExploitable list")
 }
