@@ -1,4 +1,4 @@
-module subsnipe
+module github.com/dub-flow/subsnipe
 
 go 1.21.5
 
