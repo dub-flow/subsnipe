@@ -42,6 +42,7 @@ Flags:
 
 # Setup ✅
 
+- You can install the tool via `go install github.com/dub-flow/subsnipe@latest`
 - You can simply run this tool from source via `go run .` 
 - You can build the tool yourself via `go build`
 - You can also build the `docker` image yourself via `docker build . -t fw10/subsnipe`
