@@ -22,12 +22,6 @@ func printIntro() {
 	color.Green("##################################\n\n")
 }
 
-// Checks if the 'dig' command is available on the system
-func checkDigAvailable() bool {
-    _, err := exec.LookPath("dig")
-    return err == nil
-}
-
 // Checks if https://raw.githubusercontent.com/EdOverflow/can-i-take-over-xyz/master/fingerprints.json has been updated. If so,
 // our local copy gets updated too
 func updateFingerprints() (bool, error) {
