@@ -15,7 +15,7 @@ COPY fingerprints ./fingerprints
 RUN go mod download
 
 # Build the Go app
-RUN CGO_ENABLED=0 go build -ldflags="-X main.AppVersion=$(cat VERSION) -s -w" -trimpath -o subsnipe .
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -trimpath -o subsnipe .
 
 # Second stage of multi-stage build: run the Go binary
 FROM alpine:latest
