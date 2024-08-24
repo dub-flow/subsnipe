@@ -17,7 +17,7 @@ func printIntro() {
 	color.Green("#                                #\n")
 	color.Green("#           SubSnipe             #\n")
 	color.Green("#                                #\n")
-	color.Green("#       By dub-flow with ❤️       #\n")
+	color.Green("#       By dub-flow with ❤️      #\n")
 	color.Green("#                                #\n")
 	color.Green("##################################\n\n")
 }
