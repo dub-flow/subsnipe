@@ -5,14 +5,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
+
+	_ "embed"
 
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-version"
 )
 
-var AppVersion string = "0.0.0"
-var latestRelease string = "https://github.com/dub-flow/subsnipe/releases/latest"
+//go:embed VERSION
+var AppVersion string
+var latestRelease = "https://github.com/dub-flow/subsnipe/releases/latest"
 
 func NotifyOfUpdates() {
 	client := &http.Client{}
@@ -61,16 +63,9 @@ func NotifyOfUpdates() {
 }
 
 func CheckAppVersion() {
-	if AppVersion == "0.0.0" {
-		version, err := os.ReadFile("VERSION")
-		if err != nil {
-			fmt.Print(err)
-		}
-
-		// manually assign the value from `./VERSION` if it wasn't assigned during compilation already. This makes sure
-		// that also people that run/build the app manually (without compiling the `./VERSION` into the output) get the
-		// appropriate version and aren't unnecessarily prompted to update the tool.
-		AppVersion = string(version)
+	// this should never happen, since we embed the version inside the
+	// application.
+	if AppVersion == "" {
+		AppVersion = "0.0.0-unknown"
 	}
-	// if the AppVersion is not "0.0.0" at this point, it means it has been set when compiling the app so we just leave that
 }
