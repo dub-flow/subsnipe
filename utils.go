@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/fatih/color"
@@ -20,12 +19,6 @@ func printIntro() {
 	color.Green("#       By dub-flow with ❤️       #\n")
 	color.Green("#                                #\n")
 	color.Green("##################################\n\n")
-}
-
-// Checks if the 'dig' command is available on the system
-func checkDigAvailable() bool {
-    _, err := exec.LookPath("dig")
-    return err == nil
 }
 
 // Checks if https://raw.githubusercontent.com/EdOverflow/can-i-take-over-xyz/master/fingerprints.json has been updated. If so,

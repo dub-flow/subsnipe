@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -69,11 +68,6 @@ func run(cmd *cobra.Command, args []string) {
 
 	// check if a later version of this tool exists
 	NotifyOfUpdates()
-
-	if !checkDigAvailable() {
-		log.Fatal("The 'dig' command is not available. Please ensure it is installed.")
-		return
-	}
 
 	// if the app runs inside a docker container, the output has to be written into `./output/output.md`, because
 	// we will mount the CWD inside the container into `./output/`
@@ -205,13 +199,16 @@ func checkCNAMEs(subdomainsFilePath string) {
 
 // Performs a CNAME query for a given domain and sends the result to the results channel
 func queryAndSendCNAME(domain string, results chan<- cnameResult) {
-	cname, err := exec.Command("dig", "+short", "CNAME", domain).Output()
-	if err != nil || len(cname) == 0 {
-		results <- cnameResult{domain: domain, err: fmt.Errorf("no CNAME record found or dig command failed")}
-	} else {
+	cname, err := net.LookupCNAME(domain)
+	switch {
+	case err != nil:
+		results <- cnameResult{domain: domain, err: fmt.Errorf("error obtaining CNAME records: %w", err)}
+	case cname == domain+"." || cname == "": // net.LookupCNAME formats domain with the dot at the end, hence the first condition.
+		results <- cnameResult{domain: domain, err: fmt.Errorf("no CNAME records found")}
+	default:
 		// Log the found CNAME
-		log.Infof("CNAME found for %s is: %s", domain, strings.TrimSpace(string(cname)))
-		results <- cnameResult{domain: domain, cname: strings.TrimSpace(string(cname))}
+		log.Infof("CNAME found for %s is: %s", domain, strings.TrimSpace(cname))
+		results <- cnameResult{domain: domain, cname: strings.TrimSpace(cname)}
 	}
 }
 
