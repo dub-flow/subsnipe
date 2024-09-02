@@ -36,7 +36,7 @@ var (
 )
 
 func main() {
-	var rootCmd = &cobra.Command{
+	rootCmd := &cobra.Command{
 		Use:   "subsnipe [flags]",
 		Short: "SubSnipe identifies potentially take-over-able subdomains",
 		Example: `./subsnipe -d test.com
@@ -155,7 +155,7 @@ func checkCNAMEs(subdomainsFilePath string) {
 	scanner := bufio.NewScanner(subdomainsFile)
 	var wg sync.WaitGroup
 	results := make(chan cnameResult, 100) // Buffer may be adjusted based on expected concurrency
-	sem := make(chan struct{}, threads) // Control concurrency with a semaphore
+	sem := make(chan struct{}, threads)    // Control concurrency with a semaphore
 
 	fingerprints, err := loadFingerprints(fingerprintsFile)
 	if err != nil {
@@ -283,7 +283,6 @@ func processCNAMEResult(result cnameResult, fingerprints map[string]map[string]i
 				serviceMsg := fmt.Sprintf("CNAME for %s is: %s (found potentially matching service '%s' - %s)", result.domain, result.cname, service, ifThenElse(vulnerable, "vulnerable", "safe"))
 				appendResultBasedOnVulnerability(vulnerable, serviceMsg)
 			}
-
 		} else {
 			unknownMsg := fmt.Sprintf("CNAME for %s is: %s", result.domain, result.cname)
 			unknownExploitability = append(unknownExploitability, unknownMsg)
