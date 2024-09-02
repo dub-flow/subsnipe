@@ -62,10 +62,12 @@ func NotifyOfUpdates() {
 	}
 }
 
-func CheckAppVersion() {
+func printAppVersion() {
 	// this should never happen, since we embed the version inside the
 	// application.
 	if AppVersion == "" {
 		AppVersion = "0.0.0-unknown"
 	}
+
+	color.Yellow("Current version: %s\n\n", AppVersion)
 }
