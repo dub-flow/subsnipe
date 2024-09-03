@@ -41,7 +41,7 @@ func main() {
 		Short: "SubSnipe identifies potentially take-over-able subdomains",
 		Example: `./subsnipe -d test.com
 ./subsnipe -d test.com --threads 50
-./subsnipe -skip-update-check -f subdomains.txt`,
+./subsnipe --skip-update-check -f subdomains.txt`,
 		Run: run,
 	}
 
