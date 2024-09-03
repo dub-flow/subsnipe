@@ -1,9 +1,6 @@
 #!/usr/bin/env sh
 
-# get the current version of the tool from `./VERSION`
-VERSION=$(cat VERSION)
-
-FLAGS="-X main.AppVersion=$VERSION -s -w"
+FLAGS="-s -w"
 
 rm -rf releases
 mkdir -p releases
