@@ -1,6 +1,7 @@
 #!/usr/bin/env sh
 
-FLAGS="-s -w"
+RUNNING_ENVIRONMENT="compiled"
+FLAGS="-X main.RUNNING_ENVIRONMENT=$RUNNING_ENVIRONMENT -s -w"
 
 rm -rf releases
 mkdir -p releases

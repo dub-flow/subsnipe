@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -23,6 +24,9 @@ type cnameResult struct {
 	err    error
 }
 
+//go:embed fingerprints/can-i-take-over-xyz_fingerprints.json
+var embeddedFingerprintsFile []byte
+
 var (
 	outputFileName        string = "output.md"
 	domain                string
@@ -33,6 +37,7 @@ var (
 	notExploitable        []string
 	unknownExploitability []string
 	fingerprintsFile      = filepath.Join("fingerprints", "can-i-take-over-xyz_fingerprints.json")
+	RUNNING_ENVIRONMENT   string
 )
 
 func main() {
@@ -41,7 +46,7 @@ func main() {
 		Short: "SubSnipe identifies potentially take-over-able subdomains",
 		Example: `./subsnipe -d test.com
 ./subsnipe -d test.com --threads 50
-./subsnipe --skip-update-check -f subdomains.txt`,
+./subsnipe -f subdomains.txt --skip-update-check `,
 		Run: run,
 	}
 
@@ -69,16 +74,22 @@ func run(cmd *cobra.Command, args []string) {
 		log.Fatalf("Please either provide a domain (-d <domain>) or a file with subdomains (-f <filename>)")
 	}
 
+	if RUNNING_ENVIRONMENT != "" {
+		log.Info("The RUNNING_ENVIRONMENT is: ", RUNNING_ENVIRONMENT)
+	}
+
 	// if the app runs inside a docker container, the output has to be written into `./output/output.md`, because
 	// we will mount the CWD inside the container into `./output/`
-	if os.Getenv("RUNNING_ENVIRONMENT") == "docker" {
+	if RUNNING_ENVIRONMENT == "docker" {
 		outputFileName = filepath.Join("output", outputFileName)
 	}
 
-	// Check if the fingerprints file exists
-	if fingerprintsFileExists(fingerprintsFile) {
-		// Check if https://github.com/EdOverflow/can-i-take-over-xyz/blob/master/fingerprints.json differs from the local copy in
-		// ./fingerprints/can-i-take-over-xyz_fingerprints.json (i.e., has been updated). If so, update our local copy
+	// if we neither run the compiled binary nor the docker image, we can presume that we run the Go code manually.
+	// Thus, it's a good moment to check if the fingerprints file updated and apply these updates (if there are any)
+	if RUNNING_ENVIRONMENT == "" {
+		log.Info("RUNNING_ENVIRONMENT is not set, thus we assume the tool is run directly via 'go run .'")
+
+		// Update fingerprints if running environment is not set
 		if updated, err := updateFingerprints(); err != nil {
 			log.Error("Error updating fingerprints: ", err)
 		} else if updated {
@@ -86,17 +97,6 @@ func run(cmd *cobra.Command, args []string) {
 		} else {
 			log.Info("Fingerprints are already up to date")
 		}
-	} else {
-		errorMessage := `Error loading fingerprints, cannot open 'fingerprints/can-i-take-over-xyz_fingerprints.json', to fix this:
-
-		1. Use the docker version of SubSnipe (where the fingerprints file is baked into the image)
-		2. Run the binary from within the cloned/downloaded GitHub repo, where the fingerprints file already exists in
-		3. Manually download the fingerprints file and put it into 'fingerprints/can-i-take-over-xyz_fingerprints.json'. This can be done via 'curl --create-dirs -o fingerprints/can-i-take-over-xyz_fingerprints.json https://raw.githubusercontent.com/dub-flow/subsnipe/main/fingerprints/can-i-take-over-xyz_fingerprints.json (in PowerShell, you have to create the ./fingerprints folder manually and get rid of the '--create-dirs' flag)'
-
-I appreciate you shouldn't have to deal with this error :(. 
-
-But at this point, I don't see the necessity to drop files onto your machine (besides this binary) so I give you some choices.`
-		log.Fatal(errorMessage)
 	}
 
 	var subdomainsFilePath string
@@ -171,7 +171,7 @@ func checkCNAMEs(subdomainsFilePath string) {
 	results := make(chan cnameResult, 100) // Buffer may be adjusted based on expected concurrency
 	sem := make(chan struct{}, threads)    // Control concurrency with a semaphore
 
-	fingerprints, err := loadFingerprints(fingerprintsFile)
+	fingerprints, err := loadFingerprints()
 	if err != nil {
 		log.Fatalf("Error loading fingerprints: %v", err)
 	}

@@ -64,14 +64,9 @@ func updateFingerprints() (bool, error) {
 }
 
 // Loads fingerprints from the specified file into a map
-func loadFingerprints(filename string) (map[string]map[string]interface{}, error) {
+func loadFingerprints() (map[string]map[string]interface{}, error) {
 	var fingerprints []map[string]interface{}
-	fingerprintData, err := os.ReadFile(filename)
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal(fingerprintData, &fingerprints)
+	err := json.Unmarshal(embeddedFingerprintsFile, &fingerprints)
 	if err != nil {
 		return nil, err
 	}
@@ -79,13 +74,13 @@ func loadFingerprints(filename string) (map[string]map[string]interface{}, error
 	// Map to hold fingerprints indexed by both cname and service name.
 	fingerprintMap := make(map[string]map[string]interface{})
 	for _, fingerprint := range fingerprints {
-		// Index by cname.
+		// Index by cname
 		if cnames, ok := fingerprint["cname"].([]interface{}); ok {
 			for _, cname := range cnames {
 				fingerprintMap[strings.ToLower(cname.(string))] = fingerprint
 			}
 		}
-		// Additionally, index by service name if available.
+		// Additionally, index by service name if available
 		if service, ok := fingerprint["service"].(string); ok {
 			fingerprintMap[strings.ToLower(service)] = fingerprint
 		}
@@ -160,12 +155,6 @@ func writeSubdomainsToFile(subdomains map[string]bool, filename string) error {
 		file.WriteString(cn + "\n")
 	}
 	return nil
-}
-
-// Checks if the fingerprints file exists
-func fingerprintsFileExists(filename string) bool {
-	_, err := os.Stat(filename)
-	return !os.IsNotExist(err)
 }
 
 func ifThenElse(condition bool, trueVal, falseVal string) string {
