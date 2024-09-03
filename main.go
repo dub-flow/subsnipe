@@ -75,14 +75,28 @@ func run(cmd *cobra.Command, args []string) {
 		outputFileName = filepath.Join("output", outputFileName)
 	}
 
-	// Check if https://github.com/EdOverflow/can-i-take-over-xyz/blob/master/fingerprints.json differs from the local copy in
-	// ./fingerprints/can-i-take-over-xyz_fingerprints.json (i.e., has been updated). If so, update our local copy
-	if updated, err := updateFingerprints(); err != nil {
-		log.Error("Error updating fingerprints:", err)
-	} else if updated {
-		log.Info("Fingerprints updated")
+	// Check if the fingerprints file exists
+	if fingerprintsFileExists(fingerprintsFile) {
+		// Check if https://github.com/EdOverflow/can-i-take-over-xyz/blob/master/fingerprints.json differs from the local copy in
+		// ./fingerprints/can-i-take-over-xyz_fingerprints.json (i.e., has been updated). If so, update our local copy
+		if updated, err := updateFingerprints(); err != nil {
+			log.Error("Error updating fingerprints: ", err)
+		} else if updated {
+			log.Info("Fingerprints updated")
+		} else {
+			log.Info("Fingerprints are already up to date")
+		}
 	} else {
-		log.Info("Fingerprints are already up to date")
+		errorMessage := `Error loading fingerprints, cannot open 'fingerprints/can-i-take-over-xyz_fingerprints.json', to fix this:
+
+		1. Use the docker version of SubSnipe (where the fingerprints file is baked into the image)
+		2. Run the binary from within the cloned/downloaded GitHub repo, where the fingerprints file already exists in
+		3. Manually download the fingerprints file and put it into 'fingerprints/can-i-take-over-xyz_fingerprints.json'. This can be done via 'curl --create-dirs -o fingerprints/can-i-take-over-xyz_fingerprints.json https://raw.githubusercontent.com/dub-flow/subsnipe/main/fingerprints/can-i-take-over-xyz_fingerprints.json (in PowerShell, you have to create the ./fingerprints folder manually and get rid of the '--create-dirs' flag)'
+
+I appreciate you shouldn't have to deal with this error :(. 
+
+But at this point, I don't see the necessity to drop files onto your machine (besides this binary) so I give you some choices.`
+		log.Fatal(errorMessage)
 	}
 
 	var subdomainsFilePath string

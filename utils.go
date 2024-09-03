@@ -65,33 +65,33 @@ func updateFingerprints() (bool, error) {
 
 // Loads fingerprints from the specified file into a map
 func loadFingerprints(filename string) (map[string]map[string]interface{}, error) {
-    var fingerprints []map[string]interface{}
-    fingerprintData, err := os.ReadFile(filename)
-    if err != nil {
-        return nil, err
-    }
-    
-    err = json.Unmarshal(fingerprintData, &fingerprints)
-    if err != nil {
-        return nil, err
-    }
+	var fingerprints []map[string]interface{}
+	fingerprintData, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
 
-    // Map to hold fingerprints indexed by both cname and service name.
-    fingerprintMap := make(map[string]map[string]interface{})
-    for _, fingerprint := range fingerprints {
-        // Index by cname.
-        if cnames, ok := fingerprint["cname"].([]interface{}); ok {
-            for _, cname := range cnames {
-                fingerprintMap[strings.ToLower(cname.(string))] = fingerprint
-            }
-        }
-        // Additionally, index by service name if available.
-        if service, ok := fingerprint["service"].(string); ok {
-            fingerprintMap[strings.ToLower(service)] = fingerprint
-        }
-    }
+	err = json.Unmarshal(fingerprintData, &fingerprints)
+	if err != nil {
+		return nil, err
+	}
 
-    return fingerprintMap, nil
+	// Map to hold fingerprints indexed by both cname and service name.
+	fingerprintMap := make(map[string]map[string]interface{})
+	for _, fingerprint := range fingerprints {
+		// Index by cname.
+		if cnames, ok := fingerprint["cname"].([]interface{}); ok {
+			for _, cname := range cnames {
+				fingerprintMap[strings.ToLower(cname.(string))] = fingerprint
+			}
+		}
+		// Additionally, index by service name if available.
+		if service, ok := fingerprint["service"].(string); ok {
+			fingerprintMap[strings.ToLower(service)] = fingerprint
+		}
+	}
+
+	return fingerprintMap, nil
 }
 
 // Extracts unique common names from the JSON data returned by crt.sh
@@ -130,22 +130,22 @@ func isServiceVulnerable(sld string, fingerprints map[string]map[string]interfac
 
 // Searches for a CNAME in the fingerprints and checks its vulnerability status.
 func isVulnerableCNAME(cname string, fingerprints map[string]map[string]interface{}) (bool, bool, string, bool) {
-    // Trim the trailing dot from the cname if present
-    cname = strings.TrimSuffix(cname, ".")
-    
-    for _, fingerprint := range fingerprints {
-        cnameList := fingerprint["cname"].([]interface{})
-        for _, c := range cnameList {
-            pattern := c.(string)
-            if strings.HasSuffix(cname, pattern) {
+	// Trim the trailing dot from the cname if present
+	cname = strings.TrimSuffix(cname, ".")
+
+	for _, fingerprint := range fingerprints {
+		cnameList := fingerprint["cname"].([]interface{})
+		for _, c := range cnameList {
+			pattern := c.(string)
+			if strings.HasSuffix(cname, pattern) {
 				fingerprintText := fingerprint["fingerprint"].(string)
 				hasNXDOMAINFlag := fingerprint["nxdomain"].(bool)
 
-                return true, fingerprint["vulnerable"].(bool), fingerprintText, hasNXDOMAINFlag
-            }
-        }
-    }
-    return false, false, "", false // CNAME not found in fingerprints
+				return true, fingerprint["vulnerable"].(bool), fingerprintText, hasNXDOMAINFlag
+			}
+		}
+	}
+	return false, false, "", false // CNAME not found in fingerprints
 }
 
 // Writes the extracted subdomains to the specified file
@@ -162,6 +162,12 @@ func writeSubdomainsToFile(subdomains map[string]bool, filename string) error {
 	return nil
 }
 
+// Checks if the fingerprints file exists
+func fingerprintsFileExists(filename string) bool {
+	_, err := os.Stat(filename)
+	return !os.IsNotExist(err)
+}
+
 func ifThenElse(condition bool, trueVal, falseVal string) string {
 	if condition {
 		return trueVal
@@ -170,9 +176,9 @@ func ifThenElse(condition bool, trueVal, falseVal string) string {
 }
 
 func appendResultBasedOnVulnerability(vulnerable bool, message string) {
-    if vulnerable {
-        isExploitable = append(isExploitable, message)
-    } else {
-        notExploitable = append(notExploitable, message)
-    }
+	if vulnerable {
+		isExploitable = append(isExploitable, message)
+	} else {
+		notExploitable = append(notExploitable, message)
+	}
 }
