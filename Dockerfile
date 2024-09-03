@@ -1,6 +1,9 @@
 # First stage of multi-stage build: build the Go binary
 FROM golang:alpine AS builder
 
+# Install upx for compressing the binary and reducing the docker image size
+RUN apk --no-cache add upx
+
 # Create directory for build context
 WORKDIR /build
 
@@ -17,11 +20,14 @@ RUN go mod download
 # Build the Go app
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -trimpath -o subsnipe .
 
+# Compress the binary using UPX
+RUN upx --ultra-brute -qq subsnipe && upx -t subsnipe
+
 # Second stage of multi-stage build: run the Go binary
 FROM alpine:latest
 
 # Install dig
-RUN apk --no-cache add bind-tools
+# RUN apk --no-cache add bind-tools
 
 # An env variable because e.g. the output directory needs to be different when the tool runs in docker
 ENV RUNNING_ENVIRONMENT=docker
