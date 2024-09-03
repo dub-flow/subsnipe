@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/fatih/color"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -29,6 +28,7 @@ var (
 	domain                string
 	threads               int
 	subdomainsFile        string
+	skipUpdateCheck       bool
 	isExploitable         []string
 	notExploitable        []string
 	unknownExploitability []string
@@ -36,18 +36,19 @@ var (
 )
 
 func main() {
-	var rootCmd = &cobra.Command{
+	rootCmd := &cobra.Command{
 		Use:   "subsnipe [flags]",
 		Short: "SubSnipe identifies potentially take-over-able subdomains",
 		Example: `./subsnipe -d test.com
 ./subsnipe -d test.com --threads 50
-./subsnipe -f subdomains.txt`,
+./subsnipe -skip-update-check -f subdomains.txt`,
 		Run: run,
 	}
 
 	rootCmd.Flags().StringVarP(&domain, "domain", "d", "", "The domain to query for subdomains")
 	rootCmd.Flags().StringVarP(&subdomainsFile, "subdomains", "f", "", "Path to the file containing subdomains to query (subdomains are separated by new lines)")
 	rootCmd.Flags().IntVarP(&threads, "threads", "t", 30, "Number of concurrent threads for CNAME checks")
+	rootCmd.Flags().BoolVarP(&skipUpdateCheck, "skip-update-check", "u", false, "Skip update check")
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatalf("Error executing subSnipe: %s", err)
@@ -56,18 +57,17 @@ func main() {
 
 func run(cmd *cobra.Command, args []string) {
 	printIntro()
+	printAppVersion()
 
-	// Check if the AppVersion was already set during compilation - otherwise manually get it from `./VERSION`
-	CheckAppVersion()
-	color.Yellow("Current version: %s\n\n", AppVersion)
+	if !skipUpdateCheck {
+		// Check if the AppVersion was already set during compilation - otherwise manually get it from `./VERSION`
+		NotifyOfUpdates()
+	}
 
 	// Check if either 'domain' or 'subdomainsFile' were provided
 	if (domain == "" && subdomainsFile == "") || (domain != "" && subdomainsFile != "") {
 		log.Fatalf("Please either provide a domain (-d <domain>) or a file with subdomains (-f <filename>)")
 	}
-
-	// check if a later version of this tool exists
-	NotifyOfUpdates()
 
 	// if the app runs inside a docker container, the output has to be written into `./output/output.md`, because
 	// we will mount the CWD inside the container into `./output/`
@@ -155,7 +155,7 @@ func checkCNAMEs(subdomainsFilePath string) {
 	scanner := bufio.NewScanner(subdomainsFile)
 	var wg sync.WaitGroup
 	results := make(chan cnameResult, 100) // Buffer may be adjusted based on expected concurrency
-	sem := make(chan struct{}, threads) // Control concurrency with a semaphore
+	sem := make(chan struct{}, threads)    // Control concurrency with a semaphore
 
 	fingerprints, err := loadFingerprints(fingerprintsFile)
 	if err != nil {
@@ -283,7 +283,6 @@ func processCNAMEResult(result cnameResult, fingerprints map[string]map[string]i
 				serviceMsg := fmt.Sprintf("CNAME for %s is: %s (found potentially matching service '%s' - %s)", result.domain, result.cname, service, ifThenElse(vulnerable, "vulnerable", "safe"))
 				appendResultBasedOnVulnerability(vulnerable, serviceMsg)
 			}
-
 		} else {
 			unknownMsg := fmt.Sprintf("CNAME for %s is: %s", result.domain, result.cname)
 			unknownExploitability = append(unknownExploitability, unknownMsg)
