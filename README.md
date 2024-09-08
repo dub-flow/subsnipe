@@ -36,7 +36,7 @@ Examples:
 Flags:
   -d, --domain string       The domain to query for subdomains
   -h, --help                Help for SubSnipe
-  -f, --subdomains string   Path to the file containing subdomains to query (subdomains are separated by new lines)
+  -f, --subdomains string   Path to the file containing subdomains to query (separated by newlines)
   -t, --threads int         Number of concurrent threads for CNAME checks (default 30)
   -u, --skip-update-check   Skip update check
 ```
