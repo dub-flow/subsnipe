@@ -66,7 +66,7 @@ Note that the docker version of the app is very slow at the moment (which I pres
 
 - CNAME for blablub.test.com is: blablub.cloudapp.azure.com. (found matching fingerprint - vulnerable)
 - CNAME for mail.test.com is: mail.azurewebsites.net. (found matching fingerprint - vulnerable)
-- CNAME for static.test.com is: static-test.azureedge.net. (found matching fingerprint 'vulnerable') -> `Takeover Likely Possible!`
+- CNAME for static.test.com is: static-test.azureedge.net. (found matching fingerprint - 'vulnerable') -> `Takeover Likely Possible!`
 
 ### Not Exploitable
 
