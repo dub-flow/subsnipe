@@ -234,9 +234,9 @@ func writeResults() {
 	}
 	defer outputFile.Close()
 
-	// Writing Is Exploitable section
+	// Writing Could Be Exploitable section
 	if len(isExploitable) > 0 {
-		outputFile.WriteString("### Is Exploitable\n\n")
+		outputFile.WriteString("### Could Be Exploitable\n\n")
 		for _, item := range isExploitable {
 			outputFile.WriteString("- " + item + "\n")
 		}
