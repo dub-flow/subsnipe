@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	_ "embed"
 	"encoding/json"
 	"fmt"
@@ -28,7 +27,7 @@ type cnameResult struct {
 var embeddedFingerprintsFile []byte
 
 var (
-	outputFileName        string 
+	outputFileName        string
 	domain                string
 	threads               int
 	subdomainsFile        string
@@ -102,7 +101,8 @@ func run(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	var subdomainsFilePath string
+	var subdomains []string
+	var err error
 	// if the 'subdomainsFile' flag was provided
 	if subdomainsFile != "" {
 		// Check if the subdomains file exists
@@ -110,66 +110,58 @@ func run(cmd *cobra.Command, args []string) {
 			// If the file does not exist, log an error and exit
 			log.Fatalf("The specified file with subdomains does not exist: %s", subdomainsFile)
 		}
-		// If the file exists, use its path directly
-		subdomainsFilePath = subdomainsFile
+		// If the subdomains are provided when calling SubSnipe, we don't query crt.sh
+		subdomains, err = readSubdomainsFile(subdomainsFile)
+		if err != nil {
+			log.Fatalf("Error reading subdomains file: %v", err)
+		}
 	} else if domain != "" {
 		// Query crt.sh if a domain is provided
-		queryCRTSH()
-		subdomainsFilePath = "crt-subdomains.txt"
+		subdomains, err = queryCRTSH()
+		if err != nil {
+			log.Fatalf("Error querying crt.sh: %v", err)
+		}
 	}
 
 	log.Info("Checking subdomains for: ", domain)
+	log.Infof("Number of subdomains to check: %d", len(subdomains))
 
-	checkCNAMEs(subdomainsFilePath)
+	checkCNAMEs(subdomains)
 }
 
 // Queries crt.sh for subdomains of the given domain and writes unique common names to a file
-func queryCRTSH() {
+func queryCRTSH() ([]string, error) {
 	log.Info("Querying crt.sh for subdomains... (may take a moment)")
 
 	url := fmt.Sprintf("https://crt.sh/?q=%s&output=json", domain)
 	resp, err := http.Get(url)
 	if err != nil {
-		log.Error("Error querying crt.sh: ", err)
-		return
+		return nil, fmt.Errorf("failed to query crt.sh: %w", err)
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected response from crt.sh: %d", resp.StatusCode)
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Error("Error reading response body: ", err)
-		return
+		return nil, fmt.Errorf("error reading response body: %w", err)
 	}
 
 	var data []map[string]interface{}
 	if err := json.Unmarshal(body, &data); err != nil {
-		log.Error("Error unmarshaling JSON: ", err)
-		return
+		return nil, fmt.Errorf("error unmarshaling JSON response: %w", err)
 	}
 
-	uniqueCommonNames := extractUniqueCommonNames(data)
-
-	subdomainsFilePath := "crt-subdomains.txt"
-	if err := writeSubdomainsToFile(uniqueCommonNames, subdomainsFilePath); err != nil {
-		log.Error("Error writing to file: ", err)
-		return
-	}
-
-	log.Info("Unique common names have been extracted to ", subdomainsFilePath)
+	log.Info("Done extracting subdomains from crt.sh")
+	return extractUniqueCommonNames(data), nil
 }
 
 // Reads subdomains from a file and queries for their CNAME records concurrently
-func checkCNAMEs(subdomainsFilePath string) {
+func checkCNAMEs(subdomains []string) {
 	log.Info("Querying CNAME records for subdomains...")
 
-	subdomainsFile, err := os.Open(subdomainsFilePath)
-	if err != nil {
-		log.Error("Error opening file: ", err)
-		return
-	}
-	defer subdomainsFile.Close()
-
-	scanner := bufio.NewScanner(subdomainsFile)
 	var wg sync.WaitGroup
 	results := make(chan cnameResult, 100) // Buffer may be adjusted based on expected concurrency
 	sem := make(chan struct{}, threads)    // Control concurrency with a semaphore
@@ -186,8 +178,8 @@ func checkCNAMEs(subdomainsFilePath string) {
 		}
 	}()
 
-	for scanner.Scan() {
-		domain := scanner.Text()
+	// Iterate over the passed-in subdomains
+	for _, domain := range subdomains {
 		wg.Add(1)
 		sem <- struct{}{} // Acquire semaphore
 
@@ -197,11 +189,6 @@ func checkCNAMEs(subdomainsFilePath string) {
 			defer func() { <-sem }() // Release semaphore
 			queryAndSendCNAME(domain, results)
 		}(domain)
-	}
-
-	if err := scanner.Err(); err != nil {
-		log.Error("Error reading from file: ", err)
-		return
 	}
 
 	// Wait for all queries to finish

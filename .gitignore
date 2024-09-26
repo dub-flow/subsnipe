@@ -21,7 +21,6 @@
 go.work
 
 # project files
-crt-subdomains.txt
 output.md
 releases/
 subsnipe
@@ -30,3 +29,8 @@ subdomains.txt
 .DS_Store
 
 Dockerfile-scratch-tries
+
+# run against multiple domains
+outputs
+summary.md
+domains.txt

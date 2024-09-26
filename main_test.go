@@ -1,7 +1,6 @@
 package main
 
 import (
-	"os"
 	"testing"
 
 	"github.com/jarcoal/httpmock"
@@ -21,15 +20,11 @@ func TestQueryCRTSH(t *testing.T) {
 	domain = "test.com"
 
 	// Call the function to test
-	queryCRTSH()
+	subdomains, err := queryCRTSH()
+	assert.NoError(t, err, "Expected no error querying crt.sh")
 
-	// Verify that the "crt-subdomains.txt" file is created and contains the expected content
-	content, err := os.ReadFile("crt-subdomains.txt")
-	assert.NoError(t, err, "Expected no error reading the crt-subdomains.txt file")
-	assert.Contains(t, string(content), "subdomain.test.com", "The file should contain the subdomain 'subdomain.test.com'")
-
-	// Clean up the generated file
-	os.Remove("crt-subdomains.txt")
+	// Verify that the returned subdomains contain the expected subdomain
+	assert.Contains(t, subdomains, "subdomain.test.com", "The returned subdomains should contain 'subdomain.test.com'")
 }
 
 func TestIsVulnerableCNAME_Vulnerable(t *testing.T) {

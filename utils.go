@@ -90,14 +90,44 @@ func loadFingerprints() (map[string]map[string]interface{}, error) {
 }
 
 // Extracts unique common names from the JSON data returned by crt.sh
-func extractUniqueCommonNames(data []map[string]interface{}) map[string]bool {
-	uniqueCommonNames := make(map[string]bool)
+func extractUniqueCommonNames(data []map[string]interface{}) []string {
+	uniqueCommonNames := make(map[string]struct{}) // Use struct for uniqueness
 	for _, entry := range data {
 		if cn, ok := entry["common_name"].(string); ok {
-			uniqueCommonNames[cn] = true
+			uniqueCommonNames[cn] = struct{}{} // Store keys as empty structs for uniqueness
 		}
 	}
-	return uniqueCommonNames
+
+	// Convert map keys to a slice
+	domains := make([]string, 0, len(uniqueCommonNames))
+	for cn := range uniqueCommonNames {
+		domains = append(domains, cn)
+	}
+	return domains
+}
+
+// Function to read subdomains from a file
+func readSubdomainsFile(subdomainsFile string) ([]string, error) {
+	// Check if the subdomains file exists
+	if _, err := os.Stat(subdomainsFile); os.IsNotExist(err) {
+		return nil, fmt.Errorf("the specified file with subdomains does not exist: %s", subdomainsFile)
+	}
+
+	// If the file exists, read its contents using os.ReadFile
+	fileContent, err := os.ReadFile(subdomainsFile)
+	if err != nil {
+		return nil, fmt.Errorf("error reading the subdomains file: %s", err)
+	}
+
+	// Split the file content by newlines to create a list of subdomains
+	subdomains := strings.Split(string(fileContent), "\n")
+
+	// Trim any whitespace from each subdomain
+	for i := range subdomains {
+		subdomains[i] = strings.TrimSpace(subdomains[i])
+	}
+
+	return subdomains, nil
 }
 
 // Extracts the second-level domain (SLD) from a given domain name, e.g., 'ngrok' from 'blablub.ngrok.com.'
@@ -141,20 +171,6 @@ func isVulnerableCNAME(cname string, fingerprints map[string]map[string]interfac
 		}
 	}
 	return false, false, "", false // CNAME not found in fingerprints
-}
-
-// Writes the extracted subdomains to the specified file
-func writeSubdomainsToFile(subdomains map[string]bool, filename string) error {
-	file, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	for cn := range subdomains {
-		file.WriteString(cn + "\n")
-	}
-	return nil
 }
 
 func ifThenElse(condition bool, trueVal, falseVal string) string {
