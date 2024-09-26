@@ -30,15 +30,16 @@ Usage:
 
 Examples:
 ./subsnipe -d test.com
-./subsnipe -d test.com --threads 50
-./subsnipe -f subdomains.txt
+./subsnipe -d test.com --threads 50 --output my_output.md
+./subsnipe -f subdomains.txt --skip-update-check 
 
 Flags:
   -d, --domain string       The domain to query for subdomains
-  -h, --help                Help for SubSnipe
-  -f, --subdomains string   Path to the file containing subdomains to query (separated by newlines)
-  -t, --threads int         Number of concurrent threads for CNAME checks (default 30)
+  -h, --help                help for subsnipe
+  -o, --output string       Name of the output file (default is output.md) (default "output.md")
   -u, --skip-update-check   Skip update check
+  -f, --subdomains string   Path to the file containing subdomains to query (subdomains are separated by new lines)
+  -t, --threads int         Number of concurrent threads for CNAME checks (default 30)
 ```
 
 # Setup ✅

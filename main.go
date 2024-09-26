@@ -28,7 +28,7 @@ type cnameResult struct {
 var embeddedFingerprintsFile []byte
 
 var (
-	outputFileName        string = "output.md"
+	outputFileName        string 
 	domain                string
 	threads               int
 	subdomainsFile        string
@@ -45,7 +45,7 @@ func main() {
 		Use:   "subsnipe [flags]",
 		Short: "SubSnipe identifies potentially take-over-able subdomains",
 		Example: `./subsnipe -d test.com
-./subsnipe -d test.com --threads 50
+./subsnipe -d test.com --threads 50 --output my_output.md
 ./subsnipe -f subdomains.txt --skip-update-check `,
 		Run: run,
 	}
@@ -54,6 +54,7 @@ func main() {
 	rootCmd.Flags().StringVarP(&subdomainsFile, "subdomains", "f", "", "Path to the file containing subdomains to query (subdomains are separated by new lines)")
 	rootCmd.Flags().IntVarP(&threads, "threads", "t", 30, "Number of concurrent threads for CNAME checks")
 	rootCmd.Flags().BoolVarP(&skipUpdateCheck, "skip-update-check", "u", false, "Skip update check")
+	rootCmd.Flags().StringVarP(&outputFileName, "output", "o", "output.md", "Name of the output file (default is output.md)")
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatalf("Error executing subSnipe: %s", err)
@@ -83,6 +84,8 @@ func run(cmd *cobra.Command, args []string) {
 	if RUNNING_ENVIRONMENT == "docker" {
 		outputFileName = filepath.Join("output", outputFileName)
 	}
+
+	log.Info("Output will be written to: ", outputFileName)
 
 	// if we neither run the compiled binary nor the docker image, we can presume that we run the Go code manually.
 	// Thus, it's a good moment to check if the fingerprints file updated and apply these updates (if there are any)
