@@ -120,12 +120,12 @@ func TestExtractServiceName(t *testing.T) {
 
 func TestAppendResultBasedOnVulnerability(t *testing.T) {
 	// Reset global variables for a clean test environment
-	isExploitable = []string{}
+	couldBeExploitable = []string{}
 	notExploitable = []string{}
 
 	// Test adding a vulnerable subdomain
 	appendResultBasedOnVulnerability(true, "vulnerable.example.com")
-	assert.Contains(t, isExploitable, "vulnerable.example.com", "The vulnerable domain should be added to the isExploitable list")
+	assert.Contains(t, couldBeExploitable, "vulnerable.example.com", "The vulnerable domain should be added to the isExploitable list")
 
 	// Test adding a non-vulnerable subdomain
 	appendResultBasedOnVulnerability(false, "safe.example.com")

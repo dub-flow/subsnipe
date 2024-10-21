@@ -197,3 +197,11 @@ func extractSubdomain(item string) string {
 func extractCNAME(item string) string {
 	return strings.Split(item, " ")[4]
 }
+
+// Helper function to extract the status from the results string
+func extractStatus(item string) string {
+    if index := strings.Index(item, "("); index != -1 {
+        return item[index:] // Return everything from '(' onward
+    }
+    return "" // Return an empty string if '(' is not found
+}

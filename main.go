@@ -92,7 +92,7 @@ func run(cmd *cobra.Command, args []string) {
 	// Thus, it's a good moment to check if the fingerprints file updated and apply these updates (if there are any)
 	if RUNNING_ENVIRONMENT == "" {
 		log.Info("RUNNING_ENVIRONMENT is not set, thus we assume the tool is run directly via 'go run .'")
-		
+
 		// Update fingerprints if running environment is not set
 		if updated, err := updateFingerprints(); err != nil {
 			log.Error("Error updating fingerprints: ", err)
@@ -123,6 +123,11 @@ func run(cmd *cobra.Command, args []string) {
 		if err != nil {
 			log.Fatalf("Error querying crt.sh: %v", err)
 		}
+	}
+
+	// makes it so that people don't have to explicitly specify the output file when choosing JSON as output format
+	if outputFormat == "json" && outputFileName == "output.md" {
+		outputFileName = "output.json"
 	}
 
 	log.Info("Checking subdomains for: ", domain)
@@ -194,7 +199,7 @@ func checkCNAMEs(subdomains []string) {
 
 	// Wait for all queries to finish
 	wg.Wait()
-	
+
 	// Close the results channel after all queries are complete
 	close(results)
 
@@ -238,17 +243,17 @@ func writeJSONResults() {
 	type Result struct {
 		Subdomain string `json:"subdomain"`
 		CNAME     string `json:"cname"`
-		Comment    string `json:"comment"`
+		Status    string `json:"status"`
 	}
 
 	// Create a struct to hold the grouped results
 	groupedResults := struct {
-		CouldBeExploitable   []Result `json:"couldBeExploitable"`
-		NotExploitable       []Result `json:"notExploitable"`
+		CouldBeExploitable    []Result `json:"couldBeExploitable"`
+		NotExploitable        []Result `json:"notExploitable"`
 		UnknownExploitability []Result `json:"unknownExploitability"`
 	}{
-		CouldBeExploitable:   []Result{},
-		NotExploitable:       []Result{},
+		CouldBeExploitable:    []Result{},
+		NotExploitable:        []Result{},
 		UnknownExploitability: []Result{},
 	}
 
@@ -257,7 +262,7 @@ func writeJSONResults() {
 		groupedResults.CouldBeExploitable = append(groupedResults.CouldBeExploitable, Result{
 			Subdomain: extractSubdomain(item),
 			CNAME:     extractCNAME(item),
-			Comment:    "Takeover Likely Possible!",
+			Status:    "Could be exploitable " + extractStatus(item),
 		})
 	}
 
@@ -266,7 +271,7 @@ func writeJSONResults() {
 		groupedResults.NotExploitable = append(groupedResults.NotExploitable, Result{
 			Subdomain: extractSubdomain(item),
 			CNAME:     extractCNAME(item),
-			Comment:    "Safe",
+			Status:    "Safe " + extractStatus(item),
 		})
 	}
 
@@ -275,7 +280,7 @@ func writeJSONResults() {
 		groupedResults.UnknownExploitability = append(groupedResults.UnknownExploitability, Result{
 			Subdomain: extractSubdomain(item),
 			CNAME:     extractCNAME(item),
-			Comment:    "Unknown Exploitability",
+			Status:    "Unknown Exploitability",
 		})
 	}
 
