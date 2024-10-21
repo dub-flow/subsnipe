@@ -80,10 +80,24 @@ func run(cmd *cobra.Command, args []string) {
 		log.Info("The RUNNING_ENVIRONMENT is: ", RUNNING_ENVIRONMENT)
 	}
 
+	// makes it so that people don't have to explicitly specify the output file when choosing JSON as output format
+	if outputFormat == "json" && outputFileName == "output.md" {
+		outputFileName = "output.json"
+	}
+
+	if subdomainsFile != "" {
+		log.Info("The provided subdomains file is: ", subdomainsFile)
+	}
+
 	// if the app runs inside a docker container, the output has to be written into `./output/output.md`, because
 	// we will mount the CWD inside the container into `./output/`
 	if RUNNING_ENVIRONMENT == "docker" {
 		outputFileName = filepath.Join("output", outputFileName)
+
+		// if the tool is run via docker and people pass in a subdomains file (-s) instead of a domain (-d)
+		if subdomainsFile != "" && domain == "" {
+			subdomainsFile = filepath.Join("output", subdomainsFile)
+		}
 	}
 
 	log.Info("Output will be written to: ", outputFileName)
@@ -123,11 +137,6 @@ func run(cmd *cobra.Command, args []string) {
 		if err != nil {
 			log.Fatalf("Error querying crt.sh: %v", err)
 		}
-	}
-
-	// makes it so that people don't have to explicitly specify the output file when choosing JSON as output format
-	if outputFormat == "json" && outputFileName == "output.md" {
-		outputFileName = "output.json"
 	}
 
 	if domain != "" {
@@ -231,6 +240,11 @@ func writeResults() {
 		writeJSONResults()
 	default:
 		writeMarkdownResults()
+	}
+
+	// for docker, we prepend 'output/' to the output file path. Thus, we get rid of this again now for logging purpose (to avoid confusion)
+	if RUNNING_ENVIRONMENT == "docker" {
+		outputFileName = strings.TrimPrefix(outputFileName, "output/")
 	}
 	log.Println("Results have been written to", outputFileName)
 }
