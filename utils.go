@@ -182,8 +182,18 @@ func ifThenElse(condition bool, trueVal, falseVal string) string {
 
 func appendResultBasedOnVulnerability(vulnerable bool, message string) {
 	if vulnerable {
-		isExploitable = append(isExploitable, message)
+		couldBeExploitable = append(couldBeExploitable, message)
 	} else {
 		notExploitable = append(notExploitable, message)
 	}
+}
+
+// Helper function to extract subdomain from the result strings
+func extractSubdomain(item string) string {
+	return strings.Split(item, " ")[2]
+}
+
+// Helper function to extract CNAME from the result strings
+func extractCNAME(item string) string {
+	return strings.Split(item, " ")[4]
 }

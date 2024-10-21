@@ -32,7 +32,7 @@ var (
 	threads               int
 	subdomainsFile        string
 	skipUpdateCheck       bool
-	isExploitable         []string
+	couldBeExploitable    []string
 	notExploitable        []string
 	unknownExploitability []string
 	fingerprintsFile      = filepath.Join("fingerprints", "can-i-take-over-xyz_fingerprints.json")
@@ -227,7 +227,7 @@ func writeResults() {
 	log.Println("Results have been written to", outputFileName)
 }
 
-// Function to write results in JSON format
+// Function to write results in JSON format grouped by exploitability
 func writeJSONResults() {
 	outputFile, err := os.Create(outputFileName)
 	if err != nil {
@@ -235,15 +235,54 @@ func writeJSONResults() {
 	}
 	defer outputFile.Close()
 
-	results := map[string]interface{}{
-		"couldBeExploitable":    isExploitable,
-		"notExploitable":        notExploitable,
-		"unknownExploitability": unknownExploitability,
+	type Result struct {
+		Subdomain string `json:"subdomain"`
+		CNAME     string `json:"cname"`
+		Comment    string `json:"comment"`
 	}
 
+	// Create a struct to hold the grouped results
+	groupedResults := struct {
+		CouldBeExploitable   []Result `json:"couldBeExploitable"`
+		NotExploitable       []Result `json:"notExploitable"`
+		UnknownExploitability []Result `json:"unknownExploitability"`
+	}{
+		CouldBeExploitable:   []Result{},
+		NotExploitable:       []Result{},
+		UnknownExploitability: []Result{},
+	}
+
+	// Loop through couldBeExploitable array and append to grouped results
+	for _, item := range couldBeExploitable {
+		groupedResults.CouldBeExploitable = append(groupedResults.CouldBeExploitable, Result{
+			Subdomain: extractSubdomain(item),
+			CNAME:     extractCNAME(item),
+			Comment:    "Takeover Likely Possible!",
+		})
+	}
+
+	// Loop through notExploitable array and append to grouped results
+	for _, item := range notExploitable {
+		groupedResults.NotExploitable = append(groupedResults.NotExploitable, Result{
+			Subdomain: extractSubdomain(item),
+			CNAME:     extractCNAME(item),
+			Comment:    "Safe",
+		})
+	}
+
+	// Loop through unknownExploitability array and append to grouped results
+	for _, item := range unknownExploitability {
+		groupedResults.UnknownExploitability = append(groupedResults.UnknownExploitability, Result{
+			Subdomain: extractSubdomain(item),
+			CNAME:     extractCNAME(item),
+			Comment:    "Unknown Exploitability",
+		})
+	}
+
+	// Encode the grouped results in JSON format and write to file
 	encoder := json.NewEncoder(outputFile)
 	encoder.SetIndent("", "  ") // for pretty-printing
-	if err := encoder.Encode(results); err != nil {
+	if err := encoder.Encode(groupedResults); err != nil {
 		log.Fatalf("Error writing JSON output: %v", err)
 	}
 }
@@ -257,9 +296,9 @@ func writeMarkdownResults() {
 	defer outputFile.Close()
 
 	// Writing Could Be Exploitable section
-	if len(isExploitable) > 0 {
+	if len(couldBeExploitable) > 0 {
 		outputFile.WriteString("### Could Be Exploitable\n\n")
-		for _, item := range isExploitable {
+		for _, item := range couldBeExploitable {
 			outputFile.WriteString("- " + item + "\n")
 		}
 		outputFile.WriteString("\n")
@@ -287,7 +326,7 @@ func writeMarkdownResults() {
 func processCNAMEResult(result cnameResult, fingerprints map[string]map[string]interface{}) {
 	if result.err != nil || result.cname == "" {
 		notFoundMsg := fmt.Sprintf("No CNAME record found for: %s", result.domain)
-		log.Warnf(notFoundMsg)
+		log.Infof(notFoundMsg)
 		return
 	}
 
