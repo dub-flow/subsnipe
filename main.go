@@ -2,7 +2,6 @@ package main
 
 import (
 	_ "embed"
-	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -56,7 +55,7 @@ func main() {
 	rootCmd.Flags().IntVarP(&threads, "threads", "t", 30, "Number of concurrent threads for CNAME checks")
 	rootCmd.Flags().BoolVarP(&skipUpdateCheck, "skip-update-check", "u", false, "Skip update check")
 	rootCmd.Flags().StringVarP(&outputFileName, "output", "o", "output.md", "Name of the output file (default is output.md)")
-	rootCmd.Flags().StringVarP(&outputFormat, "format", "f", "md", "Format of the output (md [default], json, csv)")
+	rootCmd.Flags().StringVarP(&outputFormat, "format", "f", "md", "Format of the output (md [default], json)")
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatalf("Error executing subSnipe: %s", err)
@@ -74,7 +73,7 @@ func run(cmd *cobra.Command, args []string) {
 
 	// Check if either 'domain' or 'subdomainsFile' were provided
 	if (domain == "" && subdomainsFile == "") || (domain != "" && subdomainsFile != "") {
-		log.Fatalf("Please either provide a domain (-d <domain>) or a file with subdomains (-f <filename>)")
+		log.Fatalf("Please either provide a domain (-d <domain>) or a file with subdomains (-s <filename>)")
 	}
 
 	if RUNNING_ENVIRONMENT != "" {
@@ -93,7 +92,7 @@ func run(cmd *cobra.Command, args []string) {
 	// Thus, it's a good moment to check if the fingerprints file updated and apply these updates (if there are any)
 	if RUNNING_ENVIRONMENT == "" {
 		log.Info("RUNNING_ENVIRONMENT is not set, thus we assume the tool is run directly via 'go run .'")
-
+		
 		// Update fingerprints if running environment is not set
 		if updated, err := updateFingerprints(); err != nil {
 			log.Error("Error updating fingerprints: ", err)
@@ -166,8 +165,8 @@ func checkCNAMEs(subdomains []string) {
 	log.Info("Querying CNAME records for subdomains...")
 
 	var wg sync.WaitGroup
-	results := make(chan cnameResult, 100) // Buffer may be adjusted based on expected concurrency
-	sem := make(chan struct{}, threads)    // Control concurrency with a semaphore
+	results := make(chan cnameResult, 100)
+	sem := make(chan struct{}, threads)
 
 	fingerprints, err := loadFingerprints()
 	if err != nil {
@@ -181,22 +180,21 @@ func checkCNAMEs(subdomains []string) {
 		}
 	}()
 
-	// Iterate over the passed-in subdomains
 	for _, domain := range subdomains {
 		wg.Add(1)
-		sem <- struct{}{} // Acquire semaphore
+		sem <- struct{}{}
 
 		// Launch a goroutine for each CNAME query
 		go func(domain string) {
 			defer wg.Done()
-			defer func() { <-sem }() // Release semaphore
+			defer func() { <-sem }()
 			queryAndSendCNAME(domain, results)
 		}(domain)
 	}
 
 	// Wait for all queries to finish
 	wg.Wait()
-
+	
 	// Close the results channel after all queries are complete
 	close(results)
 
@@ -213,7 +211,6 @@ func queryAndSendCNAME(domain string, results chan<- cnameResult) {
 	case cname == domain+"." || cname == "": // net.LookupCNAME formats domain with the dot at the end, hence the first condition.
 		results <- cnameResult{domain: domain, err: fmt.Errorf("no CNAME records found")}
 	default:
-		// Log the found CNAME
 		log.Infof("CNAME found for %s is: %s", domain, strings.TrimSpace(cname))
 		results <- cnameResult{domain: domain, cname: strings.TrimSpace(cname)}
 	}
@@ -224,8 +221,6 @@ func writeResults() {
 	switch outputFormat {
 	case "json":
 		writeJSONResults()
-	case "csv":
-		writeCSVResults()
 	default:
 		writeMarkdownResults()
 	}
@@ -240,14 +235,12 @@ func writeJSONResults() {
 	}
 	defer outputFile.Close()
 
-	// Structure to hold all results
 	results := map[string]interface{}{
 		"couldBeExploitable":    isExploitable,
 		"notExploitable":        notExploitable,
 		"unknownExploitability": unknownExploitability,
 	}
 
-	// Serialize results to JSON and write to file
 	encoder := json.NewEncoder(outputFile)
 	encoder.SetIndent("", "  ") // for pretty-printing
 	if err := encoder.Encode(results); err != nil {
@@ -255,46 +248,7 @@ func writeJSONResults() {
 	}
 }
 
-// Function to write results in CSV format
-func writeCSVResults() {
-	outputFile, err := os.Create(outputFileName)
-	if err != nil {
-		log.Fatalf("Error creating output file: %v", err)
-	}
-	defer outputFile.Close()
-
-	writer := csv.NewWriter(outputFile)
-	defer writer.Flush()
-
-	// Writing headers
-	headers := []string{"Exploitability", "Domain"}
-	if err := writer.Write(headers); err != nil {
-		log.Fatalf("Error writing CSV headers: %v", err)
-	}
-
-	// Writing exploitable results
-	for _, domain := range isExploitable {
-		if err := writer.Write([]string{"Could Be Exploitable", domain}); err != nil {
-			log.Fatalf("Error writing to CSV: %v", err)
-		}
-	}
-
-	// Writing not exploitable results
-	for _, domain := range notExploitable {
-		if err := writer.Write([]string{"Not Exploitable", domain}); err != nil {
-			log.Fatalf("Error writing to CSV: %v", err)
-		}
-	}
-
-	// Writing unknown exploitability results
-	for _, domain := range unknownExploitability {
-		if err := writer.Write([]string{"Exploitability Unknown", domain}); err != nil {
-			log.Fatalf("Error writing to CSV: %v", err)
-		}
-	}
-}
-
-// Function to write results in Markdown format (existing logic)
+// Function to write results in Markdown format
 func writeMarkdownResults() {
 	outputFile, err := os.Create(outputFileName)
 	if err != nil {
