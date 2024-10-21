@@ -2,6 +2,7 @@ package main
 
 import (
 	_ "embed"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -37,6 +38,7 @@ var (
 	unknownExploitability []string
 	fingerprintsFile      = filepath.Join("fingerprints", "can-i-take-over-xyz_fingerprints.json")
 	RUNNING_ENVIRONMENT   string
+	outputFormat          string
 )
 
 func main() {
@@ -45,15 +47,16 @@ func main() {
 		Short: "SubSnipe identifies potentially take-over-able subdomains",
 		Example: `./subsnipe -d test.com
 ./subsnipe -d test.com --threads 50 --output my_output.md
-./subsnipe -f subdomains.txt --skip-update-check `,
+./subsnipe -s subdomains.txt --skip-update-check --format json --output output.json`,
 		Run: run,
 	}
 
 	rootCmd.Flags().StringVarP(&domain, "domain", "d", "", "The domain to query for subdomains")
-	rootCmd.Flags().StringVarP(&subdomainsFile, "subdomains", "f", "", "Path to the file containing subdomains to query (subdomains are separated by new lines)")
+	rootCmd.Flags().StringVarP(&subdomainsFile, "subdomains-file", "s", "", "Path to the file containing subdomains to query (subdomains are separated by new lines)")
 	rootCmd.Flags().IntVarP(&threads, "threads", "t", 30, "Number of concurrent threads for CNAME checks")
 	rootCmd.Flags().BoolVarP(&skipUpdateCheck, "skip-update-check", "u", false, "Skip update check")
 	rootCmd.Flags().StringVarP(&outputFileName, "output", "o", "output.md", "Name of the output file (default is output.md)")
+	rootCmd.Flags().StringVarP(&outputFormat, "format", "f", "md", "Format of the output (md [default], json, csv)")
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatalf("Error executing subSnipe: %s", err)
@@ -216,8 +219,83 @@ func queryAndSendCNAME(domain string, results chan<- cnameResult) {
 	}
 }
 
-// Writes the sorted CNAME query results to an output markdown file with categorization based on exploitability
+// Writes the sorted CNAME query results to an output file with categorization based on exploitability
 func writeResults() {
+	switch outputFormat {
+	case "json":
+		writeJSONResults()
+	case "csv":
+		writeCSVResults()
+	default:
+		writeMarkdownResults()
+	}
+	log.Println("Results have been written to", outputFileName)
+}
+
+// Function to write results in JSON format
+func writeJSONResults() {
+	outputFile, err := os.Create(outputFileName)
+	if err != nil {
+		log.Fatalf("Error creating output file: %v", err)
+	}
+	defer outputFile.Close()
+
+	// Structure to hold all results
+	results := map[string]interface{}{
+		"couldBeExploitable":    isExploitable,
+		"notExploitable":        notExploitable,
+		"unknownExploitability": unknownExploitability,
+	}
+
+	// Serialize results to JSON and write to file
+	encoder := json.NewEncoder(outputFile)
+	encoder.SetIndent("", "  ") // for pretty-printing
+	if err := encoder.Encode(results); err != nil {
+		log.Fatalf("Error writing JSON output: %v", err)
+	}
+}
+
+// Function to write results in CSV format
+func writeCSVResults() {
+	outputFile, err := os.Create(outputFileName)
+	if err != nil {
+		log.Fatalf("Error creating output file: %v", err)
+	}
+	defer outputFile.Close()
+
+	writer := csv.NewWriter(outputFile)
+	defer writer.Flush()
+
+	// Writing headers
+	headers := []string{"Exploitability", "Domain"}
+	if err := writer.Write(headers); err != nil {
+		log.Fatalf("Error writing CSV headers: %v", err)
+	}
+
+	// Writing exploitable results
+	for _, domain := range isExploitable {
+		if err := writer.Write([]string{"Could Be Exploitable", domain}); err != nil {
+			log.Fatalf("Error writing to CSV: %v", err)
+		}
+	}
+
+	// Writing not exploitable results
+	for _, domain := range notExploitable {
+		if err := writer.Write([]string{"Not Exploitable", domain}); err != nil {
+			log.Fatalf("Error writing to CSV: %v", err)
+		}
+	}
+
+	// Writing unknown exploitability results
+	for _, domain := range unknownExploitability {
+		if err := writer.Write([]string{"Exploitability Unknown", domain}); err != nil {
+			log.Fatalf("Error writing to CSV: %v", err)
+		}
+	}
+}
+
+// Function to write results in Markdown format (existing logic)
+func writeMarkdownResults() {
 	outputFile, err := os.Create(outputFileName)
 	if err != nil {
 		log.Fatalf("Error creating output file: %v", err)
@@ -249,8 +327,6 @@ func writeResults() {
 			outputFile.WriteString("- " + item + "\n")
 		}
 	}
-
-	log.Println("Results have been written to", outputFileName)
 }
 
 // Processes each CNAME query result, checking against fingerprints and service names

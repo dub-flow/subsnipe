@@ -21,7 +21,7 @@
 go.work
 
 # project files
-output.md
+output.*
 releases/
 subsnipe
 subdomains.txt
