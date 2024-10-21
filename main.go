@@ -130,7 +130,10 @@ func run(cmd *cobra.Command, args []string) {
 		outputFileName = "output.json"
 	}
 
-	log.Info("Checking subdomains for: ", domain)
+	if domain != "" {
+		log.Info("Checking subdomains for: ", domain)
+	}
+
 	log.Infof("Number of subdomains to check: %d", len(subdomains))
 
 	checkCNAMEs(subdomains)
