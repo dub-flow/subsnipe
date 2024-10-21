@@ -54,8 +54,8 @@ func main() {
 	rootCmd.Flags().StringVarP(&subdomainsFile, "subdomains-file", "s", "", "Path to the file containing subdomains to query (subdomains are separated by new lines)")
 	rootCmd.Flags().IntVarP(&threads, "threads", "t", 30, "Number of concurrent threads for CNAME checks")
 	rootCmd.Flags().BoolVarP(&skipUpdateCheck, "skip-update-check", "u", false, "Skip update check")
-	rootCmd.Flags().StringVarP(&outputFileName, "output", "o", "output.md", "Name of the output file (default is output.md)")
-	rootCmd.Flags().StringVarP(&outputFormat, "format", "f", "md", "Format of the output (md [default], json)")
+	rootCmd.Flags().StringVarP(&outputFileName, "output", "o", "output.md", "Name of the output file")
+	rootCmd.Flags().StringVarP(&outputFormat, "format", "f", "md", "Format of the output (md, json)")
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatalf("Error executing subSnipe: %s", err)
