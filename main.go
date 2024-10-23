@@ -85,6 +85,7 @@ func run(cmd *cobra.Command, args []string) {
 	if RUNNING_ENVIRONMENT == "docker" {
 		if outputFileName != "output.md" && outputFileName != "output.json" {
 			log.Warn("When running the tool via docker, you cannot provide an output file via '-o'")
+			log.Warn("The output file name has been changed to 'output' (either '.json' or '.md' - depending on the output format)")
 		}
 
 		if outputFormat == "json" {
