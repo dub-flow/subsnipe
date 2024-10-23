@@ -108,12 +108,10 @@ func extractUniqueCommonNames(data []map[string]interface{}) []string {
 
 // Function to read subdomains from a file
 func readSubdomainsFile(subdomainsFile string) ([]string, error) {
-	// Check if the subdomains file exists
 	if _, err := os.Stat(subdomainsFile); os.IsNotExist(err) {
 		return nil, fmt.Errorf("the specified file with subdomains does not exist: %s", subdomainsFile)
 	}
 
-	// If the file exists, read its contents using os.ReadFile
 	fileContent, err := os.ReadFile(subdomainsFile)
 	if err != nil {
 		return nil, fmt.Errorf("error reading the subdomains file: %s", err)
@@ -122,12 +120,18 @@ func readSubdomainsFile(subdomainsFile string) ([]string, error) {
 	// Split the file content by newlines to create a list of subdomains
 	subdomains := strings.Split(string(fileContent), "\n")
 
-	// Trim any whitespace from each subdomain
-	for i := range subdomains {
-		subdomains[i] = strings.TrimSpace(subdomains[i])
+	// Create a slice to hold only the non-empty subdomains
+	var validSubdomains []string
+
+	// Iterate through the subdomains and trim any whitespace
+	for _, subdomain := range subdomains {
+		trimmedSubdomain := strings.TrimSpace(subdomain)
+		if len(trimmedSubdomain) > 0 { // check if the subdomain is non-empty
+			validSubdomains = append(validSubdomains, trimmedSubdomain)
+		}
 	}
 
-	return subdomains, nil
+	return validSubdomains, nil
 }
 
 // Extracts the second-level domain (SLD) from a given domain name, e.g., 'ngrok' from 'blablub.ngrok.com.'
@@ -200,8 +204,8 @@ func extractCNAME(item string) string {
 
 // Helper function to extract the status from the results string
 func extractStatus(item string) string {
-    if index := strings.Index(item, "("); index != -1 {
-        return item[index:] // Return everything from '(' onward
-    }
-    return "" // Return an empty string if '(' is not found
+	if index := strings.Index(item, "("); index != -1 {
+		return item[index:] // Return everything from '(' onward
+	}
+	return "" // Return an empty string if '(' is not found
 }
