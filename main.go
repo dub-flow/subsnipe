@@ -80,6 +80,22 @@ func run(cmd *cobra.Command, args []string) {
 		log.Info("The RUNNING_ENVIRONMENT is: ", RUNNING_ENVIRONMENT)
 	}
 
+	// if the tool is ran via docker, we mount in the CWD. This means that the ouput file must not be a path but only a file name. To enforce
+	// this, for now we simply don't allow passing in the -o flag if the tool runs via docker
+	if RUNNING_ENVIRONMENT == "docker" {
+		if outputFileName != "output.md" && outputFileName != "output.json" {
+			log.Warn("When running the tool via docker, you cannot provide an output file via '-o'")
+		}
+
+		if outputFormat == "json" {
+			outputFileName = "output.json"
+		}
+
+		if outputFormat == "md" {
+			outputFileName = "output.md"
+		}
+	}
+
 	// makes it so that people don't have to explicitly specify the output file when choosing JSON as output format
 	if outputFormat == "json" && outputFileName == "output.md" {
 		outputFileName = "output.json"
@@ -88,6 +104,8 @@ func run(cmd *cobra.Command, args []string) {
 	if subdomainsFile != "" {
 		log.Info("The provided subdomains file is: ", subdomainsFile)
 	}
+
+	log.Info("Output will be written to: ", outputFileName)
 
 	// if the app runs inside a docker container, the output has to be written into `./output/output.md`, because
 	// we will mount the CWD inside the container into `./output/`
@@ -99,8 +117,6 @@ func run(cmd *cobra.Command, args []string) {
 			subdomainsFile = filepath.Join("output", subdomainsFile)
 		}
 	}
-
-	log.Info("Output will be written to: ", outputFileName)
 
 	// if we neither run the compiled binary nor the docker image, we can presume that we run the Go code manually.
 	// Thus, it's a good moment to check if the fingerprints file updated and apply these updates (if there are any)
@@ -123,6 +139,9 @@ func run(cmd *cobra.Command, args []string) {
 	if subdomainsFile != "" {
 		// Check if the subdomains file exists
 		if _, err := os.Stat(subdomainsFile); os.IsNotExist(err) {
+			if RUNNING_ENVIRONMENT == "docker" {
+				log.Warn("Note that when running the tool via docker you cannot provide a relative path for the subdomains file! The file must be in the current directory.")
+			}
 			// If the file does not exist, log an error and exit
 			log.Fatalf("The specified file with subdomains does not exist: %s", subdomainsFile)
 		}
