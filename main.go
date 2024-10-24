@@ -14,6 +14,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/miekg/dns"
+
 )
 
 // cnameResult stores the result of a CNAME query for a domain
@@ -241,7 +243,21 @@ func checkCNAMEs(subdomains []string) {
 
 // Performs a CNAME query for a given domain and sends the result to the results channel
 func queryAndSendCNAME(domain string, results chan<- cnameResult) {
-	cname, err := net.LookupCNAME(domain)
+	dnsServer := "8.8.8.8"
+	client := new(dns.Client)
+	msg := new(dns.Msg)
+	msg.SetQuestion(dns.Fqdn(domain), dns.TypeCNAME)
+	resp, _, err := client.Exchange(msg, dnsServer + ":53")
+
+	var cname string
+
+	for _, answer := range resp.Answer {
+		if dnsCName, ok := answer.(*dns.CNAME); ok {
+			cname = dnsCName.Target
+			break
+		}
+	}
+
 	switch {
 	case err != nil:
 		results <- cnameResult{domain: domain, err: fmt.Errorf("error obtaining CNAME records: %w", err)}
