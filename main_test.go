@@ -28,7 +28,6 @@ func TestQueryCRTSH(t *testing.T) {
 }
 
 func TestIsVulnerableCNAME_Vulnerable(t *testing.T) {
-	// Setup a mock fingerprints data
 	fingerprints := map[string]map[string]interface{}{
 		"vulnerable.com": {
 			"cname":       []interface{}{"vulnerable.com"},
@@ -69,7 +68,6 @@ func TestIsVulnerableCNAME_NotVulnerable(t *testing.T) {
 	safeCNAME := "subdomain.safe.com."
 	directMatch, vulnerable, fingerprintText, hasNXDOMAINFlag := isVulnerableCNAME(safeCNAME, fingerprints)
 
-	// Assertions
 	assert.True(t, directMatch, "Expected a direct match for the CNAME")
 	assert.False(t, vulnerable, "Expected the CNAME to be non-vulnerable")
 	assert.Equal(t, "Safe Service", fingerprintText, "Expected the correct fingerprint text")
@@ -77,7 +75,6 @@ func TestIsVulnerableCNAME_NotVulnerable(t *testing.T) {
 }
 
 func TestIsVulnerableCNAME_NotFound(t *testing.T) {
-	// Setup mock fingerprints data
 	fingerprints := map[string]map[string]interface{}{
 		"vulnerable.com": {
 			"cname":       []interface{}{"vulnerable.com"},
