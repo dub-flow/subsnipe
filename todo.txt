@@ -1,2 +1,4 @@
 - Investigate this error that randomly happens from crt.sh: `Error unmarshaling JSON: invalid character '<' looking for beginning of value`
 - Also check the fingerprints that do not have the domain column (e.g. pantheon)
+
+- test new resolver logic on Windows
