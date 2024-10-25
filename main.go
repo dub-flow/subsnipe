@@ -12,10 +12,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/miekg/dns"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/miekg/dns"
-
 )
 
 // cnameResult stores the result of a CNAME query for a domain
@@ -243,11 +242,18 @@ func checkCNAMEs(subdomains []string) {
 
 // Performs a CNAME query for a given domain and sends the result to the results channel
 func queryAndSendCNAME(domain string, results chan<- cnameResult) {
+	// I'm not aware of an OS-agnostic way in Go to get the default DNS server of the OS... Thus, hardcoding it here to 8.8.8.8
 	dnsServer := "8.8.8.8"
 	client := new(dns.Client)
 	msg := new(dns.Msg)
 	msg.SetQuestion(dns.Fqdn(domain), dns.TypeCNAME)
-	resp, _, err := client.Exchange(msg, dnsServer + ":53")
+	resp, _, err := client.Exchange(msg, dnsServer+":53")
+
+	if err != nil {
+		log.Warnf("Error obtaining CNAME records for %s: %s", domain, err)
+		results <- cnameResult{domain: domain, err: fmt.Errorf("error obtaining CNAME records: %w", err)}
+		return
+	}
 
 	var cname string
 
@@ -259,9 +265,7 @@ func queryAndSendCNAME(domain string, results chan<- cnameResult) {
 	}
 
 	switch {
-	case err != nil:
-		results <- cnameResult{domain: domain, err: fmt.Errorf("error obtaining CNAME records: %w", err)}
-	case cname == domain+"." || cname == "": // net.LookupCNAME formats domain with the dot at the end, hence the first condition.
+	case cname == domain+"." || cname == "": // domains are formatted with the dot at the end, hence the first condition.
 		results <- cnameResult{domain: domain, err: fmt.Errorf("no CNAME records found")}
 	default:
 		log.Infof("CNAME found for %s is: %s", domain, strings.TrimSpace(cname))
