@@ -242,8 +242,16 @@ func checkCNAMEs(subdomains []string) {
 
 // Performs a CNAME query for a given domain and sends the result to the results channel
 func queryAndSendCNAME(domain string, results chan<- cnameResult) {
-	// I'm not aware of an OS-agnostic way in Go to get the default DNS server of the OS... Thus, hardcoding it here to 8.8.8.8
-	dnsServer := "8.8.8.8"
+	dnsServer, err := GetDefaultDNSServer()
+	if err != nil {
+		log.Errorf("Error retrieving default DNS server: %v", err)
+		log.Info("Using 8.8.8.8 instead")
+
+		dnsServer = "8.8.8.8"
+	} else {
+		log.Info("Default DNS Server: %s", dnsServer)
+	}
+
 	client := new(dns.Client)
 	msg := new(dns.Msg)
 	msg.SetQuestion(dns.Fqdn(domain), dns.TypeCNAME)
