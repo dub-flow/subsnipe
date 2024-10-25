@@ -39,6 +39,7 @@ var (
 	fingerprintsFile      = filepath.Join("fingerprints", "can-i-take-over-xyz_fingerprints.json")
 	RUNNING_ENVIRONMENT   string
 	outputFormat          string
+	dnsServer             string
 )
 
 func main() {
@@ -166,6 +167,17 @@ func run(cmd *cobra.Command, args []string) {
 
 	log.Infof("Number of subdomains to check: %d", len(subdomains))
 
+	// get the default DNS server based on the OS; defaults to 8.8.8.8. This is required to get CNAMEs for subdomains
+	dnsServer, err = GetDefaultDNSServer()
+	if err != nil {
+		log.Errorf("Error retrieving default DNS server: %v", err)
+		log.Info("Using 8.8.8.8 instead")
+
+		dnsServer = "8.8.8.8"
+	} else {
+		log.Infof("Default DNS Server: %s", dnsServer)
+	}
+
 	checkCNAMEs(subdomains)
 }
 
@@ -242,16 +254,6 @@ func checkCNAMEs(subdomains []string) {
 
 // Performs a CNAME query for a given domain and sends the result to the results channel
 func queryAndSendCNAME(domain string, results chan<- cnameResult) {
-	dnsServer, err := GetDefaultDNSServer()
-	if err != nil {
-		log.Errorf("Error retrieving default DNS server: %v", err)
-		log.Info("Using 8.8.8.8 instead")
-
-		dnsServer = "8.8.8.8"
-	} else {
-		log.Info("Default DNS Server: %s", dnsServer)
-	}
-
 	client := new(dns.Client)
 	msg := new(dns.Msg)
 	msg.SetQuestion(dns.Fqdn(domain), dns.TypeCNAME)
