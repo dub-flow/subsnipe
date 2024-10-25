@@ -257,7 +257,7 @@ func queryAndSendCNAME(domain string, results chan<- cnameResult) {
 	client := new(dns.Client)
 	msg := new(dns.Msg)
 	msg.SetQuestion(dns.Fqdn(domain), dns.TypeCNAME)
-	resp, _, err := client.Exchange(msg, dnsServer+":53")
+	resp, _, err := client.Exchange(msg, dnsServer)
 
 	if err != nil {
 		log.Warnf("Error obtaining CNAME records for %s: %s", domain, err)
