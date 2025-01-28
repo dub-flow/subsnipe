@@ -26,19 +26,28 @@ RUN upx --ultra-brute -qq subsnipe && upx -t subsnipe
 # Second stage of multi-stage build: run the Go binary
 FROM alpine:latest
 
+# Create a new non-root user
+RUN adduser -D -g '' appuser
+
 # Install dig
 # RUN apk --no-cache add bind-tools
 
 WORKDIR /app
 
-# Create the directory for the output.md file
-RUN mkdir output 
+# Create the directory for the output.md file and set permissions
+RUN mkdir output && chown -R appuser:appuser /app
 
-# Copy the Pre-built binary file from the previous stage
+# Copy the pre-built binary file from the previous stage
 COPY --from=builder /build/subsnipe /app/subsnipe
 
 # Copy the fingerprint files from the previous stage
 COPY --from=builder /build/fingerprints /app/fingerprints
+
+# Change ownership of the files to the new user
+RUN chown -R appuser:appuser /app/subsnipe /app/fingerprints
+
+# Switch to the non-root user
+USER appuser
 
 # Run the executable
 ENTRYPOINT ["/app/subsnipe"]
