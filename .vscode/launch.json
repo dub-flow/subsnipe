@@ -1,0 +1,22 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run SubSnipe",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}", // Adjust this path if needed
+            "args": [
+                "-o", "output.json",
+                "-f", "json",
+                "-d", "google.com"
+            ],
+            "env": {
+                "RUNNING_ENVIRONMENT": "" // Set any environment variables if needed
+            },
+            "cwd": "${workspaceFolder}", // Working directory
+            "console": "integratedTerminal" // Use the integrated terminal
+        }
+    ]
+}
