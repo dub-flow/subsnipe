@@ -90,3 +90,7 @@ Note that the docker version of the app is very slow at the moment (which I pres
 # Bug Reports 🐞
 
 If you find a bug, please file an Issue right here in GitHub, and I will try to resolve it in a timely manner.
+
+# Known Issues ⚠️
+
+-  On x86 Ubuntu (as well as Ubuntu running as WSL on an x86 Windows machine), `Subsnipe` seems to have issues finding CNAMEs for subdomains that don't have an A record. I couldn't replicate this problem on ARM Ubuntu or Ubuntu WSL (on a Windows ARM machine). I'm not quite sure what the reason for this it but it seems to be related to some internals of the Golang standard libraries. I'm putting this in the backlog for now.
